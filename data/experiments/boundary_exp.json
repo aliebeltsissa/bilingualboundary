@@ -1,0 +1,12 @@
+{
+	"task_id": "boundary_exp",
+	"task_name": "Boundary Experiment",
+	"n_participants": 40,
+	"n_sentences": 40,
+    "sentence_boundary_reps": 40
+	"calibration_freq": 16,
+	"trial_time": 2000,
+	"pause_time": 500,
+	"reveal_time": 200,
+	"gaze_time": 2000,
+}

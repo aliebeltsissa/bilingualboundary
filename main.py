@@ -48,7 +48,7 @@ FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/
 LANGUAGE = 'en' # language used for instructions, 'en' or 'it'
 
 TEST_MODE = True # if set to True, use mouse to simulate gaze position
-SKIP_TRAINING = False # if set to True, skip the training phase and go straight to the test
+SKIP_TRAINING = True # if set to True, skip the training phase and go straight to the test
 
 INSTRUCTION_CALIBRATION = {
     'en': 'New calibration... Get comfortable...',
@@ -187,12 +187,7 @@ class Experiment:
         # Set up monitor and window
         self.monitor = monitors.Monitor('monitor', width=SCREEN_WIDTH_MM, distance=SCREEN_DISTANCE_MM)
         self.monitor.setSizePix((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX))
-        self.window = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), monitor=self.monitor, fullscr=not TEST_MODE, winType='pyglet', units='pix', allowStencil=True, color=(1, 1, 1))
-        # press esc to close window
-        def escape():
-            self.window.close()
-        if 'escape' not in event.globalKeys.keys():
-            event.globalKeys.add(key='escape', func=escape)
+        self.window = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), monitor=self.monitor, fullscr=True, winType='pyglet', units='pix', allowStencil=True, color=(1, 1, 1))
 
         if not TEST_MODE:
             # Set up eye tracker connection
@@ -228,16 +223,6 @@ class Experiment:
             lineWidth=SCREEN_WIDTH_PX / 256,
         )
 
-        # Create object stimuli for use during training
-        stim_size = 40 * px_per_mm
-        self.training_object_stims = [
-            visual.ImageStim(self.window,
-                image=Path('images') / 'objects' / f'{self.user_data["object_mapping"][object_i]}.png',
-                pos=(0, 100),
-                size=(stim_size, stim_size),
-            ) for object_i in range(self.task_data['n_items'])
-        ]
-
         # Create object buttons for use in test trials
         self.object_buttons = [
             visual.ImageStim(self.window,
@@ -245,23 +230,6 @@ class Experiment:
                 size=(BUTTON_SIZE_PX, BUTTON_SIZE_PX),
                 pos=button_position,
             ) for object_i, button_position in zip(self.user_data['object_array'], button_positions)
-        ]
-
-        self.training_phrase_stims = [(
-            visual.TextStim(self.window,
-                color='black',
-                font='Courier New',
-                pos=self.pred_position_trng,
-                height=self.char_height,
-                text=pred,
-            ),
-            visual.TextStim(self.window,
-                color='black',
-                font='Courier New',
-                pos=self.targ_position_trng,
-                height=self.char_height,
-                text=targ,
-            )) for pred, targ in self.user_data['phrase_forms']
         ]
 
         self.mini_test_phrase_stims = [(
@@ -636,54 +604,7 @@ class Experiment:
         core.wait(self.pause_time * 2)
         return selected_object
 
-    def training_block(self, training_items, test_item):
-        '''
-        Run a block of training (passive exposure trials, followed by a
-        mini-test).
-        '''
-        if SKIP_TRAINING:
-            return
-        # display each passive exposure trial
-        for training_item in training_items:
-            object_stim = self.training_object_stims[training_item]
-            pred_stim, targ_stim = self.training_phrase_stims[training_item]
-            # show the object stim
-            object_stim.draw()
-            self.window.flip()
-            core.wait(self.pause_time)
-            # show the predictor word
-            if self.include_predictors:
-                object_stim.draw()
-                pred_stim.draw()
-                self.window.flip()
-                core.wait(self.pause_time)
-            # show the target word
-            object_stim.draw()
-            if self.include_predictors:
-                pred_stim.draw()
-            targ_stim.draw()
-            self.window.flip()
-            core.wait(self.trial_time - self.pause_time)
-            self.window.flip()
-            core.wait(self.pause_time)
-        # Perform mini test
-        selected_predictor = None
-        correct_predictor = None
-        if self.predictor_tests:
-            selected_predictor = self.perform_predictor_test(test_item, mini_test=True)
-            correct_predictor = self.task_data['grammar'][test_item][0] == selected_predictor
-            core.wait(self.pause_time)
-        selected_object = self.perform_object_test(test_item, mini_test=True)
-        correct_object = test_item == selected_object
-        # save response
-        self.store_response(f'mini_test', {
-            'test_item': test_item,
-            'selected_predictor': selected_predictor,
-            'selected_object': selected_object,
-            'correct_predictor': correct_predictor,
-            'correct_object': correct_object,
-        })
-
+    
     def generate_random_word_position(self):
         '''
         Choose a random y-position within the presentation area of the screen,
@@ -705,8 +626,7 @@ class Experiment:
         Run a free-fixation trial. Participant must fixate a dot for 2
         seconds, after which a word is flashed up real quick in a random
         position on the screen. The participant is then shown the object
-        stimuli and must select one by holding their gaze on it for 2
-        seconds.
+        stimuli and must select one by holding their gaze on it.
         '''
         if not TEST_MODE:
             self.mouse.setVisible(False)
@@ -778,7 +698,7 @@ class Experiment:
             height=target_stim.height,
             text=f'{target_form[0]}{mask}{target_form[-1]}',
         )
-
+   
     def free_continuation_test(self, test_item, masked=True):
         '''
         Run a free-continuation trial. Participant must fixate a dot for 2
@@ -936,7 +856,7 @@ def generate_trial_sequence(task):
     '''
     training_indices = create_item_indices(task['frequency_distribution'])
     test_indices = create_item_indices(task['frequency_distribution'])
-    # TRAINING INSTRUCTIONS
+    # INSTRUCTIONS
     if task['predictor_tests']:
         trial_sequence = [('instructions', {
             'image': f'training_with_predictor_{LANGUAGE}.png',
@@ -945,24 +865,6 @@ def generate_trial_sequence(task):
         trial_sequence = [('instructions', {
             'image': f'training_{LANGUAGE}.png',
         })]
-    # TRAINING TRIALS
-    for i in range(task['training_reps']):
-        for j in range(task['mini_test_freq']):
-            training_items = []
-            for k in range(task['n_items']):
-                if not training_indices:
-                    training_indices = create_item_indices(task['frequency_distribution'])
-                training_items.append(training_indices.pop())
-                if len(training_items) == task['mini_test_freq']:
-                    if not test_indices:
-                        test_indices = create_item_indices(task['frequency_distribution'])
-                    test_item = test_indices.pop()
-                    trial_sequence.append(('training_block', {
-                        'training_items': training_items,
-                        'test_item': test_item,
-                    }))
-                    training_items = []
-    
     # FREE-FIXATION TEST TRIALS
     if task['free_fixation_reps'] > 0:
         trial_sequence.append(('instructions', {
@@ -1010,5 +912,5 @@ if __name__ == '__main__':
     # parser.add_argument('user_id', action='store', type=str, help='user ID')
     # args = parser.parse_args()
 
-    Experiment('context_exp','1').execute()
+    Experiment('boundary_exp','1').execute()
 
