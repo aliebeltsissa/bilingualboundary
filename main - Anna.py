@@ -27,6 +27,7 @@ from pathlib import Path
 from time import time
 import random
 import json
+import csv
 
 DATA_DIR = Path('./data/experiments/')
 
@@ -132,17 +133,20 @@ class Experiment:
             self.save_user_data()
         
         # 
-        
+
+    def import_stimuli():
+        '''
+        Import the list of stimuli for the experiment.
+        '''
+
     def pick_sentence_set():
         '''
-        Choose which of the 4 lists the current participant will receive.
+        Choose which of the 4 lists the current participant will receive. 
+        This determines which preview-target combination the participant
+        will be given for each sentence.
         '''
-        choice1 = [[1,2,3,4]*40]
-        choice2 = [[2,3,4,1]*40]
-        choice3 = [[3,4,1,2]*40]
-        choice4 = [[4,1,2,3]*40]
-
-    def create_sentence_indices()
+        choices = [1,2,3,4]*40
+        random.shuffle(choices)
     
     def transform_to_center_origin(self, x, y):
         '''
