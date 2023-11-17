@@ -17,7 +17,7 @@ from os import chdir
 chdir("C:\\Users\\annal\\OneDrive\\Documents\\GitHub\\bilingualboundary\\stimuli")
 
 # screen metrics
-SCREEN_WIDTH_PX = 1920
+SCREEN_WIDTH_PX = 1280
 SCREEN_HEIGHT_PX = 720
 SCREEN_WIDTH_MM = 312
 SCREEN_DISTANCE_MM = 570
@@ -37,10 +37,12 @@ INSTRUCTION_CALIBRATION = 'New calibration... Get comfortable...'
 INSTRUCTION_END = 'Experiment complete'
 
 # EXPERIMENTAL SETTINGS
-char_width_mm = 11
+char_width_mm = 4
 px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
 char_width = int(round(char_width_mm * px_per_mm))
 char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO
+stimstart_left = 400
+stimstart_center = -600
 
 class InterruptTrialAndRecalibrate(Exception):
     pass
@@ -151,7 +153,7 @@ def boundary(stimuli_exp):
         full_sentence1 = pre_target1 + preview1 + post_target1
         sentence1_len = len(full_sentence1)
         # get boundary location relative to left of screen
-        boundary1_shift = -(SCREEN_WIDTH_PX/2 - 50) + (boundary1_index * char_width)
+        boundary1_shift = (stimstart_center) + (boundary1_index * char_width)
         trial_stimuli['boundary1_index'] = boundary1_index
         trial_stimuli['sentence1_len'] = sentence1_len
         trial_stimuli['boundary1_shift'] = boundary1_shift
@@ -174,7 +176,7 @@ def boundary(stimuli_exp):
         full_sentence2 = pre_target2 + preview2 + post_target2
         sentence2_len = len(full_sentence2)
         # get boundary location relative to left of screen
-        boundary2_shift = -(SCREEN_WIDTH_PX/2 - 50) + (boundary2_index * char_width)
+        boundary2_shift = (stimstart_center) + (boundary2_index * char_width)
         trial_stimuli['boundary2_index'] = boundary2_index
         trial_stimuli['sentence2_len'] = sentence2_len
         trial_stimuli['boundary2_shift'] = boundary2_shift
@@ -233,7 +235,7 @@ fixation_dot = visual.Circle(win,
             lineColor='black',
             radius=SCREEN_WIDTH_PX / 256,
             lineWidth=SCREEN_WIDTH_PX / 256,
-            pos=(-(SCREEN_WIDTH_PX/2-50),0)
+            pos=(stimstart_center,0)
 )
 
 clock = core.Clock()
@@ -283,7 +285,7 @@ def await_fixation_on_fixation_dot():
         elif 'q' in keypresses:
             raise InterruptTrialAndExit
         x, y = get_gaze_position()
-        distance_from_origin = ((x+(SCREEN_WIDTH_PX/2-50)) ** 2 + y ** 2) ** 0.5
+        distance_from_origin = ((x+(-stimstart_center)) ** 2 + y ** 2) ** 0.5
         if distance_from_origin < FIXATION_TOLERANCE_PX:
             if gaze_timer.getTime() >= 2:
                 return True
@@ -298,6 +300,8 @@ def await_boundary_cross(boundary):
     while True:
         if event.getKeys(['c']):
             raise InterruptTrialAndRecalibrate
+        elif event.getKeys(['q']):
+            raise InterruptTrialAndExit
         if get_gaze_position()[0] > boundary:
             return True
 
@@ -366,7 +370,7 @@ def gen_stimuli(stimuli):
             color='black',
             font='Courier New',
             alignText='left',
-            pos=(-(SCREEN_WIDTH_PX/2 - 50),0),
+            pos=(stimstart_left,0),
             height=char_height,
             text=preview_sentence,
             wrapWidth=2000
@@ -375,7 +379,7 @@ def gen_stimuli(stimuli):
             color='black',
             font='Courier New',
             alignText='left',
-            pos=(-(SCREEN_WIDTH_PX/2 - 50),0),
+            pos=(stimstart_left,0),
             height=char_height,
             text=target_sentence,
             wrapWidth=2000
@@ -413,7 +417,7 @@ def boundary_trial(trial_stimuli):
     target = trial_stimuli['target']
     post_target = trial_stimuli['post_target']
     sentence = pre_target + target + post_target
-    end = -(SCREEN_WIDTH_PX/2 - 50) + len(sentence) * char_width 
+    end = len(sentence)/2 * char_width
     show_fixation_dot()
     await_fixation_on_fixation_dot()
     prev_stim.draw()
