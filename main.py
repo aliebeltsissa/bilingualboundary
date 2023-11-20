@@ -1,5 +1,15 @@
 '''
-Code to practice displaying experiment bit by bit.
+This code was written for PsychoPy version 2023.2.3, and is intended to be
+used with an EyeLink 1000 eye tracker. It needs PyLink and 
+EyeLinkCoreGraphicsPsychoPy. Alternatively, set TEST_MODE to True and use 
+the mouse to simulate the gaze position.
+
+To terminate the experiment, press the Q key (for quit) and the experiment
+will exit once the current trial has been completed.
+
+During eye tracking trials, you can force calibration by pressing the C key
+(for calibrate), which will interrupt the current trial and return to it
+after calibration.
 '''
 
 # import packages
@@ -54,33 +64,18 @@ class InterruptTrialAndRecalibrate(Exception):
 class InterruptTrialAndExit(Exception):
     pass
 
-if not TEST_MODE:
-    import pylink
-    from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
-    tracker = pylink.EyeLink('100.1.1.1')
-    tracker.openDataFile('exp.edf')
-    tracker.sendCommand("add_file_preamble_text 'Experiment 1'")
-    pylink.openGraphicsEx(EyeLinkCoreGraphicsPsychoPy(self.tracker, self.window))
-    tracker.setOfflineMode()
-    pylink.pumpDelay(100)
-    tracker.sendCommand(f'screen_pixel_coords = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
-    tracker.sendMessage(f'DISPLAY_COORDS = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
-    tracker.sendCommand('sample_rate 1000')
-    tracker.sendCommand('recording_parse_type = GAZE')
-    tracker.sendCommand('select_parser_configuration 0')
-    tracker.sendCommand('calibration_type = HV13')
-    proportion_w = PRESENTATION_WIDTH_PX / SCREEN_WIDTH_PX
-    proportion_h = PRESENTATION_HEIGHT_PX / SCREEN_HEIGHT_PX
-    tracker.sendCommand(f'calibration_area_proportion = {proportion_w} {proportion_h}')
-    tracker.sendCommand(f'validation_area_proportion = {proportion_w} {proportion_h}')
-    tracker.sendCommand('file_event_filter = LEFT,RIGHT,FIXATION,SACCADE,BLINK,MESSAGE,BUTTON,INPUT')
-    tracker.sendCommand('file_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
-    tracker.sendCommand('link_event_filter = LEFT,RIGHT,FIXATION,FIXUPDATE,SACCADE,BLINK,BUTTON,INPUT')
-    tracker.sendCommand('link_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
 
-
-# defining things
-stimuli_filename = 'example_stim.csv'
+def import_fillers(stimuli_filename):
+    '''
+    Import the lists of filler/practice sentences for the experiment.
+    '''
+    file = open(f"{stimuli_filename}", "r")
+    data = file.read()
+    data = data.split("\n") # split text file into list
+    data = data[:-1] # remove last \n from text file
+    file.close()
+    
+    return data
 
 def import_stimuli(stimuli_filename):
     '''
@@ -264,6 +259,30 @@ fixation_dot = visual.Circle(win,
 
 clock = core.Clock()
 
+if not TEST_MODE:
+    import pylink
+    from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
+    tracker = pylink.EyeLink('100.1.1.1')
+    tracker.openDataFile('exp.edf')
+    tracker.sendCommand("add_file_preamble_text 'Experiment 1'")
+    pylink.openGraphicsEx(EyeLinkCoreGraphicsPsychoPy(tracker, win))
+    tracker.setOfflineMode()
+    pylink.pumpDelay(100)
+    tracker.sendCommand(f'screen_pixel_coords = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
+    tracker.sendMessage(f'DISPLAY_COORDS = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
+    tracker.sendCommand('sample_rate 1000')
+    tracker.sendCommand('recording_parse_type = GAZE')
+    tracker.sendCommand('select_parser_configuration 0')
+    tracker.sendCommand('calibration_type = HV13')
+    proportion_w = PRESENTATION_WIDTH_PX / SCREEN_WIDTH_PX
+    proportion_h = PRESENTATION_HEIGHT_PX / SCREEN_HEIGHT_PX
+    tracker.sendCommand(f'calibration_area_proportion = {proportion_w} {proportion_h}')
+    tracker.sendCommand(f'validation_area_proportion = {proportion_w} {proportion_h}')
+    tracker.sendCommand('file_event_filter = LEFT,RIGHT,FIXATION,SACCADE,BLINK,MESSAGE,BUTTON,INPUT')
+    tracker.sendCommand('file_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
+    tracker.sendCommand('link_event_filter = LEFT,RIGHT,FIXATION,FIXUPDATE,SACCADE,BLINK,BUTTON,INPUT')
+    tracker.sendCommand('link_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
+
 def transform_to_center_origin(x, y):
     '''
     Transform xy-coordinates based on a top-left origin into
@@ -295,7 +314,7 @@ def get_gaze_position():
         x, y = gaze_sample.getLeftEye().getGaze()
     return transform_to_center_origin(x, y)
 
-def perform_calibration(self):
+def perform_calibration(n_trials_until_calibration):
     '''
     Run through the eye tracker calibration sequence. In test mode, this
     is skipped.
@@ -358,7 +377,7 @@ def save_tracker_recording(convert_to_asc=False):
         edf_data_path = DATA_DIR / task_id / f'{user_data["user_id"]}.edf'
         suffix = 1
         while edf_data_path.exists():
-            edf_data_path = DATA_DIR / task_id / f'{self.user_data["user_id"]}_{suffix}.edf'
+            edf_data_path = DATA_DIR / task_id / f'{user_data["user_id"]}_{suffix}.edf'
             suffix += 1
         tracker.receiveDataFile('exp.edf', str(edf_data_path))
         tracker.close()
@@ -394,14 +413,14 @@ def execute(user_data):
             trial_func(**params)
         except InterruptTrialAndRecalibrate:
             abandon_trial()
-            perform_calibration()
+            perform_calibration(n_trials_until_calibration)
         except InterruptTrialAndExit:
             abandon_trial()
             break
         else:
             user_data['sequence_position'] += 1
             save_user_data()
-    visual.TextStim(self.window,
+    visual.TextStim(win,
         color='black',
         text='Experiment complete...',
     ).draw()
@@ -468,7 +487,31 @@ def instructions(image=None, message=None):
     n_trials_until_calibration = 0
     win.flip()
 
-def boundary_trial(trial_stimuli):
+
+def practice_trial(trial_stimuli):
+    '''
+    Practice trial for the boundary experiment.
+    '''
+    end = (stimstart_center) + len(trial_stimuli) * char_width   
+    show_fixation_dot()
+    await_fixation_on_fixation_dot()
+    visual.TextStim(win,
+        color='black',
+        font='Courier New',
+        alignText='left',
+        pos=(stimstart_left,0),
+        height=char_height,
+        text=trial_stimuli,
+        wrapWidth=2000
+    ).draw()
+    win.flip()
+    await_boundary_cross(end)
+    core.wait(0.5)
+    win.flip()
+    core.wait(2)
+
+
+def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials):
     '''
     Trial where the participant's gaze has to cross a boundary to continue.
     '''
@@ -482,7 +525,7 @@ def boundary_trial(trial_stimuli):
     
     # if necessary, perform calibration
     if n_trials_until_calibration == 0:
-        perform_calibration()
+        perform_calibration(n_trials_until_calibration)
     n_trials_until_calibration -= 1
 
     # set up tracker recording
@@ -507,15 +550,21 @@ def boundary_trial(trial_stimuli):
     core.wait(2)
     n_completed_trials += 1
 
-stimuli = import_stimuli(stimuli_filename)
+practice_stim = import_fillers('practice_stim.txt')
+filler_stim = import_fillers('filler_stim.txt')
+stimuli = import_stimuli('example_stim.csv')
 choices = pick_sentence_set(stimuli)
 stimuli_exp = stimuli_exp_extraction(stimuli, choices)
 stimuli_exp = boundary(stimuli_exp)
 stimuli_exp = split_separate_trials(stimuli_exp)
 random.shuffle(stimuli_exp)
 welcome = instructions(message="Welcome to the experiment. Press the spacebar to start.")
+for x in range(len(practice_stim)):
+    trial_stimuli = practice_stim[x]
+    trial = practice_trial(trial_stimuli)
+inter = instructions(message="Congratulations! Now onto the main experiment.")
 for x in range(len(stimuli_exp)):
     trial_stimuli = stimuli_exp[x]
-    trial = boundary_trial(trial_stimuli)
+    trial = boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
 
 win.close()
