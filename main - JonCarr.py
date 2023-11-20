@@ -19,7 +19,8 @@ During eye tracking trials, you can force calibration by pressing the C key
 after calibration.
 '''
 
-
+import collections
+collections.Callable = collections.abc.Callable
 from psychopy import core, event, monitors, visual
 from pathlib import Path
 from time import time
@@ -27,7 +28,7 @@ import random
 import json
 
 
-DATA_DIR = Path('../../data/experiments/')
+DATA_DIR = Path('./data/experiments/')
 
 # screen metrics
 SCREEN_WIDTH_PX = 1920
@@ -44,7 +45,7 @@ FIXATION_TOLERANCE_PX = 18 # permissible distance from the fixation dot
 TIME_RESOLUTION_SECONDS = 0.01 # time to wait between gaze position polls
 FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/3
 
-LANGUAGE = 'it' # language used for instructions, 'en' or 'it'
+LANGUAGE = 'en' # language used for instructions, 'en' or 'it'
 
 TEST_MODE = True # if set to True, use mouse to simulate gaze position
 SKIP_TRAINING = True # if set to True, skip the training phase and go straight to the test
@@ -185,7 +186,7 @@ class Experiment:
         # Set up monitor and window
         self.monitor = monitors.Monitor('monitor', width=SCREEN_WIDTH_MM, distance=SCREEN_DISTANCE_MM)
         self.monitor.setSizePix((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX))
-        self.window = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), monitor=self.monitor, fullscr=not TEST_MODE, winType='pyglet', units='pix', allowStencil=True, color=(1, 1, 1))
+        self.window = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), monitor=self.monitor, fullscr=True, winType='pyglet', units='pix', allowStencil=True, color=(1, 1, 1))
 
         if not TEST_MODE:
             # Set up eye tracker connection
@@ -1003,4 +1004,4 @@ if __name__ == '__main__':
     parser.add_argument('user_id', action='store', type=str, help='user ID')
     args = parser.parse_args()
 
-    Experiment(args.task_id, args.user_id).execute()
+    Experiment(args.task_id, args.usAer_id).execute()
