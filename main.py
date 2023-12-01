@@ -13,18 +13,19 @@ after calibration.
 '''
 
 # import packages
-import collections
+import collections.abc
 collections.Callable = collections.abc.Callable
-from psychopy import core, event, monitors, visual, core, gui
-from pathlib import Path
-from time import time
-import random
-import json
-import csv
-import pandas as pd
 from os import chdir
+import random
+from pathlib import Path
+import pandas as pd
+from psychopy import event, visual, core
 
-chdir("C:\\Users\\annal\\OneDrive\\Documents\\GitHub\\bilingualboundary\\stimuli")
+# for own laptop:
+chdir("C:\\Users\\annal\\OneDrive\\Documents\GitHub\\bilingualboundary\\stimuli")
+
+# for the lab:
+# chdir("D:\\ALiebelt\\bilingualboundary\\stimuli")
 
 # screen metrics
 SCREEN_WIDTH_PX = 1280
@@ -53,8 +54,15 @@ char_width_mm = 4
 px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
 char_width = int(round(char_width_mm * px_per_mm))
 char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO
-stimstart_left = 400
-stimstart_center = -600
+
+# for own laptop:
+# stimstart_left = 400
+# stimstart_center = -600
+
+# for lab computer:
+stimstart_left = 200
+stimstart_center = -800
+
 n_completed_trials = 0
 n_trials_until_calibration = 0
 
@@ -81,7 +89,8 @@ def import_stimuli(stimuli_filename):
     '''
     Import the list of stimuli for the experiment.
     '''
-    column_names = ['morph_type','target','cognate','legal_non','illegal_non','sentence1','sentence2']
+    column_names = ['morph_type','target','cognate','legal_non',
+                    'illegal_non','sentence1','sentence2']
     # import file as dataframe
     df = pd.read_csv(f"{stimuli_filename}", index_col=0)
     # make dataframe into dictionary
@@ -91,7 +100,7 @@ def import_stimuli(stimuli_filename):
     # replace data by column:data dictionary
     stimuli = {}
     for x in range(temp_length):
-        values = [i for i in temp.values()]
+        values = list(temp.values())
         value = values[x]
         value2 = {column_names[x]: value[x] for x in range(len(column_names))}
         stimuli[x] = value2
@@ -118,7 +127,7 @@ def stimuli_exp_extraction(stimuli, choices):
     stimuli_exp = []
     stimuli_copy = stimuli.copy()
     sentencen = len(stimuli_copy.keys())
-    indices = [x for x in range(sentencen)]
+    indices =list(range(sentencen))
     for x in range(len(choices)):
         list_type = choices[x]
         indice = random.choice(indices)
@@ -340,7 +349,7 @@ def await_fixation_on_fixation_dot():
         keypresses = event.getKeys()
         if 'c' in keypresses:
             raise InterruptTrialAndRecalibrate
-        elif 'q' in keypresses:
+        if 'q' in keypresses:
             raise InterruptTrialAndExit
         x, y = get_gaze_position()
         distance_from_origin = ((x+(-stimstart_center)) ** 2 + y ** 2) ** 0.5
@@ -358,42 +367,42 @@ def await_boundary_cross(boundary):
     while True:
         if event.getKeys(['c']):
             raise InterruptTrialAndRecalibrate
-        elif event.getKeys(['q']):
+        if event.getKeys(['q']):
             raise InterruptTrialAndExit
         if get_gaze_position()[0] > boundary:
             return True
 
 def save_tracker_recording(convert_to_asc=False):
-        '''
-        Save the eye tracker recording and close the connection. Ensure that
-        the recording does not overwrite a file that already exists.
-        '''
-        if TEST_MODE:
-            return
-        tracker.setOfflineMode()
-        pylink.pumpDelay(100)
-        tracker.closeDataFile()
-        pylink.pumpDelay(500)
-        edf_data_path = DATA_DIR / task_id / f'{user_data["user_id"]}.edf'
-        suffix = 1
-        while edf_data_path.exists():
-            edf_data_path = DATA_DIR / task_id / f'{user_data["user_id"]}_{suffix}.edf'
-            suffix += 1
-        tracker.receiveDataFile('exp.edf', str(edf_data_path))
-        tracker.close()
-        if convert_to_asc:
-            from os import system
-            system(f'edf2asc {edf_data_path}')
+    '''
+    Save the eye tracker recording and close the connection. Ensure that
+    the recording does not overwrite a file that already exists.
+    '''
+    if TEST_MODE:
+        return
+    tracker.setOfflineMode()
+    pylink.pumpDelay(100)
+    tracker.closeDataFile()
+    pylink.pumpDelay(500)
+    #edf_data_path = / task_id / f'{user_data["user_id"]}.edf' needs adjustment
+    suffix = 1
+    while edf_data_path.exists():
+        #edf_data_path = / task_id / f'{user_data["user_id"]}_{suffix}.edf' needs adjustment
+        suffix += 1
+    tracker.receiveDataFile('exp.edf', str(edf_data_path))
+    tracker.close()
+    if convert_to_asc:
+        from os import system
+        system(f'edf2asc {edf_data_path}')
 
 def abandon_trial():
-        '''
-        Abandon the current trial. This stops eye tracker recording and writes
-        a trial_abandoned message.
-        '''
-        if TEST_MODE:
-            return
-        tracker.sendMessage('trial_abandoned')
-        tracker.stopRecording()
+    '''
+    Abandon the current trial. This stops eye tracker recording and writes
+    a trial_abandoned message.
+    '''
+    if TEST_MODE:
+        return
+    tracker.sendMessage('trial_abandoned')
+    tracker.stopRecording()
 
 def execute(user_data):
     '''
@@ -445,7 +454,6 @@ def gen_stimuli(stimuli):
     preview = stimuli['preview']
     preview_sentence = pre_target + preview + post_target
     target_sentence = pre_target + target + post_target
-    target_pos = (len(preview)//2 + char_width + len(target)//2 , 0)
     prev_stim = visual.TextStim(win,
             color='black',
             font='Courier New',
@@ -480,6 +488,9 @@ def instructions(image=None, message=None):
         visual.TextStim(win,
             color='black',
             text=message,
+            font='Courier New',
+            wrapWidth=1000,
+            height=char_height,
             pos=(0,0)
         ).draw()
     win.flip()
@@ -522,13 +533,10 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     post_target = trial_stimuli['post_target']
     sentence = pre_target + target + post_target
     end = (stimstart_center) + len(sentence) * char_width
-    
     # if necessary, perform calibration
     if n_trials_until_calibration == 0:
         perform_calibration(n_trials_until_calibration)
     n_trials_until_calibration -= 1
-
-    # set up tracker recording
     if not TEST_MODE:
         tracker.startRecording(1,1,1,1)
         tracker.drawText(
@@ -536,7 +544,6 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
         )
         tracker.sendMessage('trial_type boundary_trial')
         tracker.sendMessage(f'target {target}')
-
     show_fixation_dot()
     await_fixation_on_fixation_dot()
     prev_stim.draw()
@@ -558,13 +565,19 @@ stimuli_exp = stimuli_exp_extraction(stimuli, choices)
 stimuli_exp = boundary(stimuli_exp)
 stimuli_exp = split_separate_trials(stimuli_exp)
 random.shuffle(stimuli_exp)
-welcome = instructions(message="Welcome to the experiment. Press the spacebar to start.")
-for x in range(len(practice_stim)):
-    trial_stimuli = practice_stim[x]
-    trial = practice_trial(trial_stimuli)
-inter = instructions(message="Congratulations! Now onto the main experiment.")
-for x in range(len(stimuli_exp)):
-    trial_stimuli = stimuli_exp[x]
-    trial = boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
+
+# welcome
+instructions(message="Welcome to the experiment. First, you will see some examples of what you will have to do in the experiment. Press the spacebar to start.")
+
+# practice trials
+for item in practice_stim:
+    trial_stimuli = item
+    practice_trial(trial_stimuli)
+
+# main experiment
+instructions(message="Congratulations! Now onto the main experiment. Press the spacebar when ready")
+for item in stimuli_exp:
+    trial_stimuli = item
+    boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
 
 win.close()
