@@ -56,12 +56,12 @@ char_width = int(round(char_width_mm * px_per_mm))
 char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO
 
 # for own laptop:
-# stimstart_left = 400
-# stimstart_center = -600
+stimstart_left = 400
+stimstart_center = -600
 
 # for lab computer:
-stimstart_left = 200
-stimstart_center = -800
+# stimstart_left = 200
+# stimstart_center = -800
 
 n_completed_trials = 0
 n_trials_until_calibration = 0
@@ -82,7 +82,6 @@ def import_fillers(stimuli_filename):
     data = data.split("\n") # split text file into list
     data = data[:-1] # remove last \n from text file
     file.close()
-    
     return data
 
 def import_stimuli(stimuli_filename):
@@ -163,10 +162,10 @@ def boundary(stimuli_exp):
     Generate info on boundary.
     '''
     for x in range(len(stimuli_exp)): # for each trial
-        # get stimuli for trial    
-        trial_stimuli = stimuli_exp[x] 
+        # get stimuli for trial
+        trial_stimuli = stimuli_exp[x]
         # extract sentence 1
-        sentence1 = trial_stimuli['sentence1'] 
+        sentence1 = trial_stimuli['sentence1']
         # find the index of 'X' (to be replaced by the preview/target)
         X1_pos = sentence1.index('X')
         # get the sentence up to the target word
@@ -187,9 +186,9 @@ def boundary(stimuli_exp):
         trial_stimuli['boundary1_shift'] = boundary1_shift
         trial_stimuli['pre_target1'] = pre_target1
         trial_stimuli['post_target1'] = post_target1
-         
+        
         # extract sentence 2
-        sentence2 = trial_stimuli['sentence2'] 
+        sentence2 = trial_stimuli['sentence2']
         # find the index of 'X' (to be replaced by the preview/target)
         X2_pos = sentence2.index('X')
         # get the sentence up to the target word
@@ -218,8 +217,7 @@ def split_separate_trials(stimuli_exp):
     Splits the 2 sentences for each word into separate trial stimuli.
     '''
     stimuli_split = []
-    for x in range(len(stimuli_exp)):
-        trial_stimuli = stimuli_exp[x]
+    for trial_stimuli in stimuli_exp:
         morph_type = trial_stimuli['morph_type']
         list_index = trial_stimuli['list_index']
         indice = trial_stimuli['indice']
@@ -254,7 +252,7 @@ def split_separate_trials(stimuli_exp):
     return stimuli_split
 
 # display setup
-win = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), fullscr=True,units='pix')  
+win = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), fullscr=True,units='pix')
 
 mouse = event.Mouse(visible=True, win=win)
 mouse.clickReset()
@@ -503,7 +501,7 @@ def practice_trial(trial_stimuli):
     '''
     Practice trial for the boundary experiment.
     '''
-    end = (stimstart_center) + len(trial_stimuli) * char_width   
+    end = (stimstart_center) + len(trial_stimuli) * char_width
     show_fixation_dot()
     await_fixation_on_fixation_dot()
     visual.TextStim(win,
