@@ -15,14 +15,17 @@ after calibration.
 # import packages
 import collections.abc
 collections.Callable = collections.abc.Callable
-from os import chdir
+import os
 import random
 from pathlib import Path
 import pandas as pd
+import argparse
 from psychopy import event, visual, core
+import json
 
 # for own laptop:
-chdir("C:\\Users\\annal\\OneDrive\\Documents\GitHub\\bilingualboundary\\stimuli")
+#os.chdir("C:\\Users\\annal\\OneDrive\\Documents\GitHub\\bilingualboundary\\stimuli")
+DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
 
 # for the lab:
 # chdir("D:\\ALiebelt\\bilingualboundary\\stimuli")
@@ -77,7 +80,7 @@ def import_fillers(stimuli_filename):
     '''
     Import the lists of filler/practice sentences for the experiment.
     '''
-    file = open(f"{stimuli_filename}", "r")
+    file = open(f"./stimuli/{stimuli_filename}", "r")
     data = file.read()
     data = data.split("\n") # split text file into list
     data = data[:-1] # remove last \n from text file
@@ -91,7 +94,7 @@ def import_stimuli(stimuli_filename):
     column_names = ['morph_type','target','cognate','legal_non',
                     'illegal_non','sentence1','sentence2']
     # import file as dataframe
-    df = pd.read_csv(f"{stimuli_filename}", index_col=0)
+    df = pd.read_csv(f'./stimuli/{stimuli_filename}', index_col=0)
     # make dataframe into dictionary
     temp = df.to_dict("split")
     temp = dict(zip(temp["index"], temp["data"]))
@@ -357,6 +360,7 @@ def await_fixation_on_fixation_dot():
         else:
             gaze_timer.reset()
 
+
 def await_boundary_cross(boundary):
     '''
     Wait for the participant's gaze to cross a boundary. If the C key
@@ -370,6 +374,7 @@ def await_boundary_cross(boundary):
         if get_gaze_position()[0] > boundary:
             return True
 
+
 def save_tracker_recording(convert_to_asc=False):
     '''
     Save the eye tracker recording and close the connection. Ensure that
@@ -381,16 +386,17 @@ def save_tracker_recording(convert_to_asc=False):
     pylink.pumpDelay(100)
     tracker.closeDataFile()
     pylink.pumpDelay(500)
-    #edf_data_path = / task_id / f'{user_data["user_id"]}.edf' needs adjustment
+    edf_data_path = f'/{sbj_ID}.edf' # maybe needs adjustment
     suffix = 1
     while edf_data_path.exists():
-        #edf_data_path = / task_id / f'{user_data["user_id"]}_{suffix}.edf' needs adjustment
+        edf_data_path = f'/{sbj_ID}_{suffix}.edf' # maybe needs adjustment
         suffix += 1
     tracker.receiveDataFile('exp.edf', str(edf_data_path))
     tracker.close()
     if convert_to_asc:
         from os import system
         system(f'edf2asc {edf_data_path}')
+
 
 def abandon_trial():
     '''
@@ -401,6 +407,7 @@ def abandon_trial():
         return
     tracker.sendMessage('trial_abandoned')
     tracker.stopRecording()
+
 
 def execute(user_data):
     '''
@@ -435,12 +442,14 @@ def execute(user_data):
     save_tracker_recording(convert_to_asc=True)
     core.quit()
 
+
 def show_fixation_dot():
     '''
     Display the fixation cross.
     '''
     fixation_dot.draw()
     win.flip()
+
 
 def gen_stimuli(stimuli):
     '''
@@ -472,6 +481,7 @@ def gen_stimuli(stimuli):
         )
     return prev_stim, targ_stim
 
+
 def instructions(image=None, message=None):
     '''
     Display an instructional image or message and await a press of the
@@ -479,8 +489,7 @@ def instructions(image=None, message=None):
     '''
     if image:
         visual.ImageStim(win,
-            image=Path(f'images/instructions/{image}'),
-            size=(1000, 600),
+            image=Path(f'./images/instructions/{image}')
         ).draw()
     elif message:
         visual.TextStim(win,
@@ -555,6 +564,19 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     core.wait(2)
     n_completed_trials += 1
 
+
+def save_user_data(sbj_ID, user_data_path, user_data):
+    '''
+    Write the current state of the user_data dictionary to JSON.
+    '''
+    #modified_time = int(time())
+    path = f'./data/sbj_{sbj_ID}'
+    with open(f'{path}/{sbj_ID}.json', 'w') as file:
+        json.dump(user_data, file, indent='\t')
+    file.close()
+
+
+user_data = []
 practice_stim = import_fillers('practice_stim.txt')
 filler_stim = import_fillers('filler_stim.txt')
 stimuli = import_stimuli('example_stim.csv')
@@ -563,9 +585,22 @@ stimuli_exp = stimuli_exp_extraction(stimuli, choices)
 stimuli_exp = boundary(stimuli_exp)
 stimuli_exp = split_separate_trials(stimuli_exp)
 random.shuffle(stimuli_exp)
+user_data.append(stimuli_exp)
+
+# get participant ID
+parser = argparse.ArgumentParser()
+parser.add_argument('user_id', action='store', type=str, help='user ID')
+args = parser.parse_args()
+sbj_ID = args.user_id
+
+# set up participant output folder
+user_path = Path('./data')
+user_data_path = user_path / f'sbj_{sbj_ID}'
+if not user_data_path.exists():
+    user_data_path.mkdir()
 
 # welcome
-instructions(message="Welcome to the experiment. First, you will see some examples of what you will have to do in the experiment. Press the spacebar to start.")
+instructions(image='welcome_instructions.png')
 
 # practice trials
 for item in practice_stim:
@@ -577,5 +612,9 @@ instructions(message="Congratulations! Now onto the main experiment. Press the s
 for item in stimuli_exp:
     trial_stimuli = item
     boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
+
+# save data
+save_user_data(sbj_ID, user_data_path, user_data)
+
 
 win.close()
