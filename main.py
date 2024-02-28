@@ -129,7 +129,7 @@ def stimuli_exp_extraction(stimuli, choices):
     stimuli_exp = []
     stimuli_copy = stimuli.copy()
     sentencen = len(stimuli_copy.keys())
-    indices =list(range(sentencen))
+    indices = list(range(sentencen))
     for x in range(len(choices)):
         list_type = choices[x]
         indice = random.choice(indices)
@@ -339,6 +339,20 @@ def perform_calibration(n_trials_until_calibration):
     n_trials_until_calibration = calibration_freq
 
 
+def await_mouse_selection(button):
+    '''
+    Wait for a mouse click and then check if the click is on one of the
+    object buttons; if so, return the selected item.
+    '''
+    mouse.clickReset()
+    while True:
+        core.wait(TIME_RESOLUTION_SECONDS)
+        if mouse.getPressed()[0]:
+            mouse_position = mouse.getPos()
+            if button.contains(mouse_position):
+                return button.name
+
+
 def await_fixation_on_fixation_dot():
     '''
     Wait for the participant to fixate the fixation dot for the specified
@@ -482,7 +496,7 @@ def gen_stimuli(stimuli):
     return prev_stim, targ_stim
 
 
-def instructions(image=None, message=None):
+def instructions(image=None, message=None, progression=None):
     '''
     Display an instructional image or message and await a press of the
     space bar to continue.
@@ -500,10 +514,24 @@ def instructions(image=None, message=None):
             height=char_height,
             pos=(0,0)
         ).draw()
+    if progression == 'button':
+        next = visual.ImageStim(win,
+            image=Path('./images/buttons/next.png',),
+            size=BUTTON_SIZE_PX,
+            pos=(0,-SCREEN_HEIGHT_PX/2+50), # bottom of screen
+            name='next'
+        )
+        next.draw()
     win.flip()
-    event.waitKeys(keyList=['space'])
+
     n_trials_until_calibration = 0
-    win.flip()
+    if progression == 'button':
+        selected_button = await_mouse_selection(next)
+        if selected_button == 'next':
+            win.flip()
+    else:
+        event.waitKeys(keyList=['space'])
+        win.flip()
 
 
 def practice_trial(trial_stimuli):
@@ -579,7 +607,7 @@ def save_user_data(sbj_ID, user_data_path, user_data):
 user_data = []
 practice_stim = import_fillers('practice_stim.txt')
 filler_stim = import_fillers('filler_stim.txt')
-stimuli = import_stimuli('example_stim.csv')
+stimuli = import_stimuli('experiment_stim.csv')
 choices = pick_sentence_set(stimuli)
 stimuli_exp = stimuli_exp_extraction(stimuli, choices)
 stimuli_exp = boundary(stimuli_exp)
@@ -608,7 +636,7 @@ for item in practice_stim:
     practice_trial(trial_stimuli)
 
 # main experiment
-instructions(message="Congratulations! Now onto the main experiment. Press the spacebar when ready")
+instructions(message="Congratulations! Now onto the main experiment. Press 'Next' when ready",progression='button')
 for item in stimuli_exp:
     trial_stimuli = item
     boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
