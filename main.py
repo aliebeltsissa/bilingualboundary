@@ -57,6 +57,8 @@ char_width_mm = 4
 px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
 char_width = int(round(char_width_mm * px_per_mm))
 char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO
+top_of_screen = (0,SCREEN_HEIGHT_PX/2-100)
+bottom_of_screen = (0,-SCREEN_HEIGHT_PX/2+100)
 
 # for own laptop:
 stimstart_left = 400
@@ -534,6 +536,58 @@ def instructions(image=None, message=None, progression=None):
         win.flip()
 
 
+def textbox_input(prompt=''):
+    text1 = visual.TextStim(win,
+        text=prompt,
+        font='Courier New',
+        height=char_height,
+        color='black',
+        pos=top_of_screen
+    )
+
+    text2 = visual.TextStim(win,
+        text='Press "enter" when done.',
+        font='Courier New',
+        height=char_height,
+        color='black',
+        pos=bottom_of_screen
+    )
+
+    text_box = visual.TextBox2(win, 
+        text='',
+        color='black',
+        font='Courier New',
+        letterHeight=char_height,
+        borderColor='black'
+    )
+
+    while True:
+        keys = event.getKeys()  # Get keyboard events
+        if 'escape' in keys:  # Exit the loop if the 'escape' key is pressed
+            break
+        if len(keys) > 0:  # If any key is pressed
+            if keys[0] == 'backspace':  # Handle backspace key
+                text_box.text = text_box.text[:-1]  # Remove the last character
+            elif keys[0] == 'return':  # Handle return key (end of input)
+                output = text_box.text
+                break
+            elif keys[0] == 'comma':
+                text_box.text += ','
+            elif keys[0] == 'space':
+                text_box.text += ' '
+            elif keys[0] == 'apostrophe':
+                text_box.text += "'"
+            elif keys[0] == 'period':
+                text_box.text += '.'
+            elif len(keys[0]) == 1:
+                text_box.text += keys[0]  # Add the pressed key to the text box
+        text1.draw()
+        text2.draw()
+        text_box.draw()  # Draw the text box on the window
+        win.flip()  # Update the window
+    return output
+
+
 def practice_trial(trial_stimuli):
     '''
     Practice trial for the boundary experiment.
@@ -629,6 +683,10 @@ if not user_data_path.exists():
 
 # welcome
 instructions(image='welcome_instructions.png')
+
+# text input prompt
+strangeness_prompt = textbox_input('Did you notice anything strange when reading the sentences?')
+user_data.append(f'Noticed strangeness?: {strangeness_prompt}')
 
 # practice trials
 for item in practice_stim:
