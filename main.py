@@ -520,7 +520,7 @@ def instructions(image=None, message=None, progression=None):
         next = visual.ImageStim(win,
             image=Path('./images/buttons/next.png',),
             size=BUTTON_SIZE_PX,
-            pos=(0,-SCREEN_HEIGHT_PX/2+50), # bottom of screen
+            pos=bottom_of_screen,
             name='next'
         )
         next.draw()
@@ -537,7 +537,7 @@ def instructions(image=None, message=None, progression=None):
 
 
 def textbox_input(prompt=''):
-    text1 = visual.TextStim(win,
+    instruction = visual.TextStim(win,
         text=prompt,
         font='Courier New',
         height=char_height,
@@ -545,7 +545,7 @@ def textbox_input(prompt=''):
         pos=top_of_screen
     )
 
-    text2 = visual.TextStim(win,
+    progression = visual.TextStim(win,
         text='Press "enter" when done.',
         font='Courier New',
         height=char_height,
@@ -554,11 +554,11 @@ def textbox_input(prompt=''):
     )
 
     text_box = visual.TextBox2(win, 
-        text='',
+        text='|', # cursor for where you're is typing
         color='black',
         font='Courier New',
         letterHeight=char_height,
-        borderColor='black'
+        borderColor='black',
     )
 
     while True:
@@ -567,24 +567,25 @@ def textbox_input(prompt=''):
             break
         if len(keys) > 0:  # If any key is pressed
             if keys[0] == 'backspace':  # Handle backspace key
-                text_box.text = text_box.text[:-1]  # Remove the last character
+                text_box.text = text_box.text[:-2] + '|'  # Remove the last character
             elif keys[0] == 'return':  # Handle return key (end of input)
                 output = text_box.text
                 break
             elif keys[0] == 'comma':
-                text_box.text += ','
+                text_box.text = text_box.text[:-1] + ',|'
             elif keys[0] == 'space':
-                text_box.text += ' '
+                text_box.text = text_box.text[:-1] + ' |'
             elif keys[0] == 'apostrophe':
-                text_box.text += "'"
+                text_box.text = text_box.text[:-1] + "'|"
             elif keys[0] == 'period':
-                text_box.text += '.'
+                text_box.text = text_box.text[:-1] + '.|'
             elif len(keys[0]) == 1:
-                text_box.text += keys[0]  # Add the pressed key to the text box
-        text1.draw()
-        text2.draw()
-        text_box.draw()  # Draw the text box on the window
-        win.flip()  # Update the window
+                text_box.text = text_box.text[:-1] + keys[0] + '|' # Add the pressed key to the text box
+        
+        instruction.draw()
+        progression.draw()
+        text_box.draw()
+        win.flip()
     return output
 
 
