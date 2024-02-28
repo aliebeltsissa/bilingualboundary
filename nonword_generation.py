@@ -8,7 +8,7 @@ def import_stimuli(stimuli_filename):
     '''
     Import the list of stimuli for the experiment.
     '''
-    column_names = ['morph_type','boundary','LD','target','cognate','legal_non','illegal_non','sentence1','sentence2']
+    column_names = ['morph_type','affix_onset_indice','LD','Italian','English','legal_non','illegal_non','sentence1','sentence2']
     # import file as dataframe
     df = pd.read_csv(f"{stimuli_filename}", index_col=0)
     # make dataframe into dictionary
@@ -34,6 +34,7 @@ def extract_targets(stimuli):
     # exclude characters too strange to work if randomly placed in middle of word
     to_exclude = ['j','k','q','v','w','x','y','z']
     characters = [x for x in alphabet if x not in to_exclude]
+    consonants = ['b','c','d','f','g','h','j','k','l','m','n','p','q','r','s','t','v','w','x','y','z']
     
     full_output = []
     nonwords_to_generate = 10
@@ -41,9 +42,18 @@ def extract_targets(stimuli):
     for x in range(len(stimuli)):
         line = stimuli[x]
         morph_type = line['morph_type']
-        target = line['target']
+        target = line['English']
+        italian = line['Italian']
         LD = line['LD']
         nonwords = []
+        
+        target_len = len(target)
+        target_characters = [*target]
+        italian_characters = [*italian]
+        characters_toavoid = target_characters + italian_characters
+        consonants_touse = [character for character in consonants if character not in characters_toavoid]
+        sampled_con = random.sample(consonants_touse, target_len)
+        illegal_nonword = ''.join(sampled_con)
         
         while len(nonwords) < nonwords_to_generate:
             if morph_type == 'simple':
@@ -63,7 +73,7 @@ def extract_targets(stimuli):
                 if LD == 1: # can't function well for LD of 1
                     LD = 2
                     
-                boundary = int(line['boundary'])
+                boundary = int(line['affix_onset_indice'])
                 # this is the indice for the 1st character after the boudnary 
                 # between stem & affix
                 part1 = target[:boundary]
@@ -105,8 +115,13 @@ def extract_targets(stimuli):
                 nonword = nonword_part1 + nonword_part2
             nonwords.append(nonword)
             
-        full_output.append([target,LD,nonwords])
-    return full_output
+        full_output.append([target,LD,illegal_nonword,nonwords])
+        nonwords = pd.DataFrame(full_output)
+        nonwords.columns = ['Italian', 'LD','illegal_nonword','options']
+        nonwords[['op1','op2','op3','op4','op5','op6','op7','op8','op9','op10']] = pd.DataFrame(nonwords.options.tolist(), index= nonwords.index)
+        del nonwords['options']
+    return nonwords
 
-stimuli = import_stimuli('example_stim_withLDs.csv')
+stimuli = import_stimuli('experiment_stim_withLDs.csv')
 nonwords = extract_targets(stimuli)
+nonwords.to_csv('nonword_options.csv', index=True, header=True)
