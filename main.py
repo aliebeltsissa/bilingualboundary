@@ -89,6 +89,54 @@ def import_fillers(stimuli_filename):
     file.close()
     return data
 
+
+def import_comprehension(comprehension_filename):
+    '''
+    Import the list of stimuli for the experiment.
+    '''
+    column_names = ['English','sentence','pre_target','comprehension_statement','TRUE/FALSE']
+    # import file as dataframe
+    df = pd.read_csv(f'./stimuli/{comprehension_filename}', index_col=0)
+    # make dataframe into dictionary
+    temp = df.to_dict("split")
+    temp = dict(zip(temp["index"], temp["data"]))
+    temp_length = len(temp.keys())
+    # replace data by column:data dictionary
+    stimuli = {}
+    for x in range(temp_length):
+        values = list(temp.values())
+        value = values[x]
+        value2 = {column_names[x]: value[x] for x in range(len(column_names))}
+        stimuli[x] = value2
+    return stimuli
+
+
+def comprehension_prep(comprehension_stim):
+    '''
+    Sets up information for use in comprehension questions.
+    '''
+    starts = []
+    for x in range(len(comprehension_stim)): # for each trial
+        # get stimuli for trial
+        trial_stimuli = comprehension_stim[x]
+        # extract each sentence end
+        pre_target = trial_stimuli['pre_target']
+        expected = trial_stimuli['TRUE/FALSE']
+        prompt = trial_stimuli['comprehension_statement']
+        starts.append({'start':pre_target,'prompt':prompt,'expected':expected})
+    # only select some sentences to be tested on
+    n_comprehension = 30 # how many sentences do you want to test the comprehension of?
+    while len(starts) > n_comprehension:
+        random_element = random.choice(starts)
+        starts.remove(random_element)
+    starts_lst = []
+    for x in range(len(starts)):
+        trial = starts[x]
+        start = trial['start']
+        starts_lst.append(start)
+    return starts, starts_lst
+
+
 def import_stimuli(stimuli_filename):
     '''
     Import the list of stimuli for the experiment.
@@ -341,7 +389,7 @@ def perform_calibration(n_trials_until_calibration):
     n_trials_until_calibration = calibration_freq
 
 
-def await_mouse_selection(button):
+def await_mouse_selection(buttons):
     '''
     Wait for a mouse click and then check if the click is on one of the
     object buttons; if so, return the selected item.
@@ -351,8 +399,9 @@ def await_mouse_selection(button):
         core.wait(TIME_RESOLUTION_SECONDS)
         if mouse.getPressed()[0]:
             mouse_position = mouse.getPos()
-            if button.contains(mouse_position):
-                return button.name
+            for button in buttons:
+                if button.contains(mouse_position):
+                    return button.name
 
 
 def await_fixation_on_fixation_dot():
@@ -528,7 +577,7 @@ def instructions(image=None, message=None, progression=None):
 
     n_trials_until_calibration = 0
     if progression == 'button':
-        selected_button = await_mouse_selection(next)
+        selected_button = await_mouse_selection([next])
         if selected_button == 'next':
             win.flip()
     else:
@@ -589,6 +638,52 @@ def textbox_input(prompt=''):
     return output
 
 
+def comprehension_check(pre_target,comprehension_stim):
+    '''
+    Comprehension check for certain sentences.
+    '''
+    if pre_target == 'Fifteen men and women were at the market that day.': statement = 'There were men at the market.'
+    
+    for trial in comprehension_stim:
+        if trial['start'] == pre_target:
+            statement = trial['prompt']
+
+    instructions = visual.TextStim(win,
+        text="Thinking about what you've just read, is this true or false?",
+        color='black',
+        height=char_height,
+        font='Courier New',
+        pos=top_of_screen
+    )
+    comprehension = visual.TextStim(win,
+        text=statement,
+        color='darkblue',
+        height=char_height,
+        font='Courier New'
+    )
+    true = visual.ImageStim(win,
+        image=Path('./images/buttons/true.png',),
+        size=BUTTON_SIZE_PX,
+        pos=(-200,-SCREEN_HEIGHT_PX/2+100),
+        name='true'
+    )
+    false = visual.ImageStim(win,
+        image=Path('./images/buttons/false.png',),
+        size=BUTTON_SIZE_PX,
+        pos=(200,-SCREEN_HEIGHT_PX/2+100),
+        name='false'
+    )
+    instructions.draw()
+    comprehension.draw()
+    true.draw()
+    false.draw()
+    win.flip()
+    selected_button = await_mouse_selection([true,false])
+    if selected_button == 'true' or selected_button == 'false':
+        win.flip()
+        return selected_button
+
+
 def practice_trial(trial_stimuli):
     '''
     Practice trial for the boundary experiment.
@@ -597,12 +692,12 @@ def practice_trial(trial_stimuli):
     show_fixation_dot()
     await_fixation_on_fixation_dot()
     visual.TextStim(win,
+        text=trial_stimuli,
         color='black',
         font='Courier New',
         alignText='left',
         pos=(stimstart_left,0),
         height=char_height,
-        text=trial_stimuli,
         wrapWidth=2000
     ).draw()
     win.flip()
@@ -610,6 +705,11 @@ def practice_trial(trial_stimuli):
     core.wait(0.5)
     win.flip()
     core.wait(2)
+    if trial_stimuli == 'Fifteen men and women were at the market that day.':
+        attention_sentence = trial_stimuli
+    else:
+        attention_sentence = '0' # else don't do an attention check
+    return attention_sentence
 
 
 def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials):
@@ -646,6 +746,7 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     win.flip()
     core.wait(2)
     n_completed_trials += 1
+    return pre_target
 
 
 def save_user_data(sbj_ID, user_data_path, user_data):
@@ -662,6 +763,8 @@ def save_user_data(sbj_ID, user_data_path, user_data):
 user_data = []
 practice_stim = import_fillers('practice_stim.txt')
 filler_stim = import_fillers('filler_stim.txt')
+comprehension = import_comprehension('comprehension_stim.csv')
+comprehension_stim, comprehension_stim_lst = comprehension_prep(comprehension)
 stimuli = import_stimuli('experiment_stim.csv')
 choices = pick_sentence_set(stimuli)
 stimuli_exp = stimuli_exp_extraction(stimuli, choices)
@@ -690,15 +793,21 @@ strangeness_prompt = textbox_input('Did you notice anything strange when reading
 user_data.append(f'Noticed strangeness?: {strangeness_prompt}')
 
 # practice trials
-for item in practice_stim:
-    trial_stimuli = item
-    practice_trial(trial_stimuli)
+#for item in practice_stim:
+#    trial_stimuli = item
+#    attention_sentence = practice_trial(trial_stimuli)
+#    if attention_sentence != '0':
+#        selection = comprehension_check(attention_sentence,comprehension_stim)
+#        user_data.append({attention_sentence: selection})
 
 # main experiment
 instructions(message="Congratulations! Now onto the main experiment. Press 'Next' when ready",progression='button')
 for item in stimuli_exp:
     trial_stimuli = item
-    boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
+    pre_target = boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
+    if pre_target in comprehension_stim_lst:
+        response = comprehension_check(pre_target,comprehension_stim)
+        user_data.append({pre_target: response})
 
 # save data
 save_user_data(sbj_ID, user_data_path, user_data)
