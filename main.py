@@ -28,12 +28,20 @@ import json
 DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
 
 # for the lab:
-# chdir("D:\\ALiebelt\\bilingualboundary\\stimuli")
+#chdir("D:\\ALiebelt\\bilingualboundary\\stimuli")
+#DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
 
 # screen metrics
+#LAB
+SCREEN_WIDTH_PX = 1920
+SCREEN_HEIGHT_PX = 1080
+SCREEN_WIDTH_MM = 600
+
+#LAPTOP
 SCREEN_WIDTH_PX = 1280
 SCREEN_HEIGHT_PX = 720
 SCREEN_WIDTH_MM = 312
+
 SCREEN_DISTANCE_MM = 570
 
 # area of the screen that is actually used
@@ -53,10 +61,13 @@ INSTRUCTION_END = 'Experiment complete'
 # EXPERIMENTAL SETTINGS
 task_id = 'boundary_exp'
 calibration_freq = 16
-char_width_mm = 4
+#LAPTOP:
+char_width_mm = 3.5
+#LAB:
+#char_width_mm = 5
 px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
 char_width = int(round(char_width_mm * px_per_mm))
-char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO
+char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO # font size 17 on laptop, 20 in lab
 top_of_screen = (0,SCREEN_HEIGHT_PX/2-100)
 bottom_of_screen = (0,-SCREEN_HEIGHT_PX/2+100)
 
@@ -64,9 +75,9 @@ bottom_of_screen = (0,-SCREEN_HEIGHT_PX/2+100)
 stimstart_left = 400
 stimstart_center = -600
 
-# for lab computer:
-# stimstart_left = 200
-# stimstart_center = -800
+# for lab computer: # CHECK THIS - BEFORE WAS TOO FAR LEFT, NOW A BIT (TOO?) CLOSE TO CENTER
+#stimstart_left = 200
+#stimstart_center = -800
 
 n_completed_trials = 0
 n_trials_until_calibration = 0
@@ -322,6 +333,9 @@ clock = core.Clock()
 if not TEST_MODE:
     import pylink
     from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
+
+if not TEST_MODE:
+    # Set up eye tracker connection
     tracker = pylink.EyeLink('100.1.1.1')
     tracker.openDataFile('exp.edf')
     tracker.sendCommand("add_file_preamble_text 'Experiment 1'")
@@ -387,6 +401,35 @@ def perform_calibration(n_trials_until_calibration):
     if not TEST_MODE:
         tracker.doTrackerSetup()
     n_trials_until_calibration = calibration_freq
+    return n_trials_until_calibration
+
+
+def await_gaze_selection(buttons):
+    '''
+    Wait for the participant to fixate an object for the specified time
+    and return the selected item. If the C key is pressed, the trial will
+    be abandoned in order to recalibrate.
+    '''
+    fixated_button = None
+    gaze_timer = core.Clock()
+    while True:
+        if event.getKeys(['c']):
+            raise InterruptTrialAndRecalibrate
+        gaze_position = get_gaze_position()
+        for button in buttons:
+            if button.contains(gaze_position):
+                if button == fixated_button:
+                    # still looking at the same button
+                    if gaze_timer.getTime() >= 2:
+                        # and gaze has been on button for sufficient time
+                        return button.name
+                else: # gaze has moved to different button, reset timer
+                    fixated_button = button
+                    gaze_timer.reset()
+                break
+        else: # gaze is not on any button, reset timer
+            fixated_button = None
+            gaze_timer.reset()
 
 
 def await_mouse_selection(buttons):
@@ -492,7 +535,7 @@ def execute(user_data):
             trial_func(**params)
         except InterruptTrialAndRecalibrate:
             abandon_trial()
-            perform_calibration(n_trials_until_calibration)
+            n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
         except InterruptTrialAndExit:
             abandon_trial()
             break
@@ -514,6 +557,56 @@ def show_fixation_dot():
     '''
     fixation_dot.draw()
     win.flip()
+
+
+def render_experimenter_screen():
+    '''
+    Render an outline of the screen on the host computer. In test mode,
+    this is skipped.
+    '''
+    if TEST_MODE:
+        return
+    tracker.clearScreen(color=0)
+    tracker.drawLine(
+        (SCREEN_WIDTH_PX // 2 + stimstart_center, 0), # line start
+        (SCREEN_WIDTH_PX // 2 + stimstart_center, SCREEN_HEIGHT_PX), # line end
+        color=1
+    )
+    tracker.drawLine(
+        (0, SCREEN_HEIGHT_PX // 2),
+        (SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX // 2),
+        color=1
+    )
+
+
+def render_experimenter_screen_comprehension():
+    '''
+    Render an outline of the screen on the host computer. In test mode,
+    this is skipped.
+    '''
+    if TEST_MODE:
+        return
+    tracker.clearScreen(color=0)
+    tracker.drawLine(
+        (0, SCREEN_HEIGHT_PX // 2),
+        (SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX // 2),
+        color=1
+    )
+    tracker.drawBox( # for 'True' button
+        -200,
+        -SCREEN_HEIGHT_PX/2+100,
+        BUTTON_SIZE_PX,
+        BUTTON_SIZE_PX,
+        color=1
+    )
+    tracker.drawBox( # for 'False' button
+        200,
+        -SCREEN_HEIGHT_PX/2+100,
+        BUTTON_SIZE_PX,
+        BUTTON_SIZE_PX,
+        color=1
+    )
+
 
 
 def gen_stimuli(stimuli):
@@ -577,12 +670,14 @@ def instructions(image=None, message=None, progression=None):
 
     n_trials_until_calibration = 0
     if progression == 'button':
-        selected_button = await_mouse_selection([next])
+        mouse.visible = True
+        selected_button = await_gaze_selection([next])
         if selected_button == 'next':
             win.flip()
     else:
         event.waitKeys(keyList=['space'])
         win.flip()
+    mouse.setVisible(TEST_MODE)
 
 
 def textbox_input(prompt=''):
@@ -642,6 +737,7 @@ def comprehension_check(pre_target,comprehension_stim):
     '''
     Comprehension check for certain sentences.
     '''
+    mouse.setVisible(True)
     if pre_target == 'Fifteen men and women were at the market that day.': statement = 'There were men at the market.'
     
     for trial in comprehension_stim:
@@ -649,7 +745,7 @@ def comprehension_check(pre_target,comprehension_stim):
             statement = trial['prompt']
 
     instructions = visual.TextStim(win,
-        text="Thinking about what you've just read, is this true or false?",
+        text="Thinking about what you've just read, is this true or false? (Look at your answer)",
         color='black',
         height=char_height,
         font='Courier New',
@@ -678,19 +774,26 @@ def comprehension_check(pre_target,comprehension_stim):
     true.draw()
     false.draw()
     win.flip()
-    selected_button = await_mouse_selection([true,false])
+    selected_button = await_gaze_selection([true,false])
     if selected_button == 'true' or selected_button == 'false':
         win.flip()
-        return selected_button
+    mouse.setVisible(TEST_MODE)
+    return selected_button
 
 
 def practice_trial(trial_stimuli):
     '''
     Practice trial for the boundary experiment.
     '''
+    render_experimenter_screen()
+    if not TEST_MODE:
+        tracker.startRecording(1, 1, 1, 1)
     end = (stimstart_center) + len(trial_stimuli) * char_width
     show_fixation_dot()
-    await_fixation_on_fixation_dot()
+    try:
+        await_fixation_on_fixation_dot()
+    except InterruptTrialAndRecalibrate:
+        n_trials_until_calibration = perform_calibration()
     visual.TextStim(win,
         text=trial_stimuli,
         color='black',
@@ -700,10 +803,26 @@ def practice_trial(trial_stimuli):
         height=char_height,
         wrapWidth=2000
     ).draw()
+    visual.TextStim(win,
+        text="|",
+        color='black',
+        alignText='center',
+        pos=(-SCREEN_WIDTH_PX/2+40,0)
+    ).draw()
+    visual.TextStim(win,
+        text="|",
+        color='black',
+        alignText='center',
+        pos=(SCREEN_WIDTH_PX/2-40,0)
+    ).draw()
     win.flip()
+    if not TEST_MODE:
+        tracker.sendMessage('trigger_timer')
     await_boundary_cross(end)
     core.wait(0.5)
     win.flip()
+    if not TEST_MODE:
+        tracker.stopRecording()
     core.wait(2)
     if trial_stimuli == 'Fifteen men and women were at the market that day.':
         attention_sentence = trial_stimuli
@@ -716,6 +835,7 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     '''
     Trial where the participant's gaze has to cross a boundary to continue.
     '''
+    render_experimenter_screen()
     prev_stim, targ_stim = gen_stimuli(trial_stimuli)
     boundary = trial_stimuli['boundary_shift']
     pre_target = trial_stimuli['pre_target']
@@ -725,7 +845,7 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     end = (stimstart_center) + len(sentence) * char_width
     # if necessary, perform calibration
     if n_trials_until_calibration == 0:
-        perform_calibration(n_trials_until_calibration)
+        n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
     n_trials_until_calibration -= 1
     if not TEST_MODE:
         tracker.startRecording(1,1,1,1)
@@ -737,13 +857,41 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     show_fixation_dot()
     await_fixation_on_fixation_dot()
     prev_stim.draw()
+    visual.TextStim(win,
+        text="|",
+        color='black',
+        alignText='center',
+        pos=(-SCREEN_WIDTH_PX/2+40,0)
+    ).draw()
+    visual.TextStim(win,
+        text="|",
+        color='black',
+        alignText='center',
+        pos=(SCREEN_WIDTH_PX/2-40,0)
+    ).draw()
     win.flip()
     targ_stim.draw()
+    visual.TextStim(win,
+        text="|",
+        color='black',
+        alignText='center',
+        pos=(-SCREEN_WIDTH_PX/2+40,0)
+    ).draw()
+    visual.TextStim(win,
+        text="|",
+        color='black',
+        alignText='center',
+        pos=(SCREEN_WIDTH_PX/2-40,0)
+    ).draw()
     await_boundary_cross(boundary)
     win.flip()
+    if not TEST_MODE:
+        tracker.sendMessage('trigger_timer')
     await_boundary_cross(end)
     core.wait(0.5)
     win.flip()
+    if not TEST_MODE:
+        tracker.stopRecording()
     core.wait(2)
     n_completed_trials += 1
     return pre_target
@@ -788,20 +936,23 @@ if not user_data_path.exists():
 # welcome
 instructions(image='welcome_instructions.png')
 
+# calibration
+n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
+
 # text input prompt
 strangeness_prompt = textbox_input('Did you notice anything strange when reading the sentences?')
 user_data.append(f'Noticed strangeness?: {strangeness_prompt}')
 
 # practice trials
-#for item in practice_stim:
-#    trial_stimuli = item
-#    attention_sentence = practice_trial(trial_stimuli)
-#    if attention_sentence != '0':
-#        selection = comprehension_check(attention_sentence,comprehension_stim)
-#        user_data.append({attention_sentence: selection})
+for item in practice_stim:
+    trial_stimuli = item
+    attention_sentence = practice_trial(trial_stimuli)
+    if attention_sentence != '0':
+        selection = comprehension_check(attention_sentence,comprehension_stim)
+        user_data.append({attention_sentence: selection})
 
 # main experiment
-instructions(message="Congratulations! Now onto the main experiment. Press 'Next' when ready",progression='button')
+instructions(message="Congratulations! Now onto the main experiment. Look at 'Next' when ready.",progression='button')
 for item in stimuli_exp:
     trial_stimuli = item
     pre_target = boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
