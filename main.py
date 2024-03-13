@@ -10,6 +10,10 @@ will exit once the current trial has been completed.
 During eye tracking trials, you can force calibration by pressing the C key
 (for calibrate), which will interrupt the current trial and return to it
 after calibration.
+
+Launch the experiment from the command line with the following arguments:
+    python main.py (sbj_ID) (experiment list number)
+For example: python main.py '1' '2'
 '''
 
 # import packages
@@ -23,24 +27,33 @@ import argparse
 from psychopy import event, visual, core
 import json
 
-# for own laptop:
-#os.chdir("C:\\Users\\annal\\OneDrive\\Documents\GitHub\\bilingualboundary\\stimuli")
-DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
 
-# for the lab:
-#chdir("D:\\ALiebelt\\bilingualboundary\\stimuli")
+#######
+# LAB #
+#######
 #DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
+#SCREEN_WIDTH_PX = 1920
+#SCREEN_HEIGHT_PX = 1080
+#SCREEN_WIDTH_MM = 600
 
-# screen metrics
-#LAB
-SCREEN_WIDTH_PX = 1920
-SCREEN_HEIGHT_PX = 1080
-SCREEN_WIDTH_MM = 600
+#char_width_mm = 5
+#stimstart_left = 600
+#stimstart_center = -400
 
-#LAPTOP
+
+##########
+# LAPTOP #
+##########
+DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
 SCREEN_WIDTH_PX = 1280
 SCREEN_HEIGHT_PX = 720
 SCREEN_WIDTH_MM = 312
+
+char_width_mm = 3.5
+stimstart_left = 400
+stimstart_center = -600
+
+
 
 SCREEN_DISTANCE_MM = 570
 
@@ -49,7 +62,7 @@ PRESENTATION_WIDTH_PX = 960
 PRESENTATION_HEIGHT_PX = 540
 
 BUTTON_SIZE_PX = 100 # size of object buttons
-FIXATION_TOLERANCE_PX = 18 # permissible distance from the fixation dot
+FIXATION_TOLERANCE_PX = 30 # permissible distance from the fixation dot
 TIME_RESOLUTION_SECONDS = 0.01 # time to wait between gaze position polls
 FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/3
 
@@ -60,27 +73,19 @@ INSTRUCTION_END = 'Experiment complete'
 
 # EXPERIMENTAL SETTINGS
 task_id = 'boundary_exp'
-calibration_freq = 16
-#LAPTOP:
-char_width_mm = 3.5
-#LAB:
-#char_width_mm = 5
+calibration_freq = 9
 px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
 char_width = int(round(char_width_mm * px_per_mm))
 char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO # font size 17 on laptop, 20 in lab
-top_of_screen = (0,SCREEN_HEIGHT_PX/2-100)
-bottom_of_screen = (0,-SCREEN_HEIGHT_PX/2+100)
+top_of_screen_y = SCREEN_HEIGHT_PX/2-300
+top_of_screen = (0,top_of_screen_y)
+bottom_of_screen_y = -SCREEN_HEIGHT_PX/2+300
+bottom_of_screen = (0,bottom_of_screen_y)
 
-# for own laptop:
-stimstart_left = 400
-stimstart_center = -600
-
-# for lab computer: # CHECK THIS - BEFORE WAS TOO FAR LEFT, NOW A BIT (TOO?) CLOSE TO CENTER
-#stimstart_left = 200
-#stimstart_center = -800
 
 n_completed_trials = 0
 n_trials_until_calibration = 0
+
 
 class InterruptTrialAndRecalibrate(Exception):
     pass
@@ -148,12 +153,11 @@ def comprehension_prep(comprehension_stim):
     return starts, starts_lst
 
 
-def import_stimuli(stimuli_filename):
+def import_stimulilst(stimuli_filename):
     '''
     Import the list of stimuli for the experiment.
     '''
-    column_names = ['morph_type','target','cognate','legal_non',
-                    'illegal_non','sentence1','sentence2']
+    column_names = ['morph_type','lst_type','target','preview','sentence']
     # import file as dataframe
     df = pd.read_csv(f'./stimuli/{stimuli_filename}', index_col=0)
     # make dataframe into dictionary
@@ -169,20 +173,8 @@ def import_stimuli(stimuli_filename):
         stimuli[x] = value2
     return stimuli
 
-def pick_sentence_set(stimuli):
-    '''
-    Choose which of the 4 lists the current participant will receive. 
-    This determines which preview-target combination the participant
-    will be given for each sentence.
-    '''
-    choices = []
-    options = [1,2,3,4]
-    for x in range(len(stimuli.keys())):
-        choice = random.choice(options)
-        choices.append(choice)
-    return choices
 
-def stimuli_exp_extraction(stimuli, choices):
+def stimuli_exp_extraction(stimuli):
     '''
     This forms the sentences each participant is going to see, based
     on their randomly allocated list for each item.
@@ -192,34 +184,19 @@ def stimuli_exp_extraction(stimuli, choices):
     sentencen = len(stimuli_copy.keys())
     indices = list(range(sentencen))
     for x in range(len(choices)):
-        list_type = choices[x]
         indice = random.choice(indices)
         indices.remove(indice)
         item = stimuli_copy[indice]
         morph_type = item['morph_type']
+        lst_type = item['lst_type']
         target = item['target']
-        cognate = item['cognate']
-        legal_non = item['legal_non']
-        illegal_non = item['illegal_non']
-        sentence1 = item['sentence1']
-        sentence2 = item['sentence2']
-        if list_type == 1:
-            preview1 = target
-            preview2 = legal_non
-        if list_type == 2:
-            preview1 = target
-            preview2 = illegal_non
-        if list_type == 3:
-            preview1 = cognate
-            preview2 = legal_non
-        if list_type == 4:
-            preview1 = cognate
-            preview2 = illegal_non
-        stimuli_exp.append({'indice':indice,'list_index':list_type,
+        preview = item['preview']
+        sentence = item['sentence']
+        stimuli_exp.append({'indice':indice,'lst_type':lst_type,
                         'morph_type':morph_type,'target':target,
-                        'preview1':preview1,'preview2':preview2,
-                        'sentence1':sentence1,'sentence2':sentence2})
+                        'preview':preview,'sentence':sentence})
     return stimuli_exp
+
 
 def boundary(stimuli_exp):
     '''
@@ -229,91 +206,30 @@ def boundary(stimuli_exp):
         # get stimuli for trial
         trial_stimuli = stimuli_exp[x]
         # extract sentence 1
-        sentence1 = trial_stimuli['sentence1']
+        sentence = trial_stimuli['sentence']
         # find the index of 'X' (to be replaced by the preview/target)
-        X1_pos = sentence1.index('X')
+        X_pos = sentence.index('X')
         # get the sentence up to the target word
-        pre_target1 = sentence1[:X1_pos]
+        pre_target = sentence[:X_pos]
         # get the sentence after the target word
-        post_target1 = sentence1[X1_pos+1:]
+        post_target = sentence[X_pos+1:]
         # find the index of the last letter in the pre-target word
-        boundary1_index = X1_pos - 1
+        boundary_index = X_pos - 1
         # get preview
-        preview1 = trial_stimuli['preview1']
+        preview = trial_stimuli['preview']
         # get total sentence length
-        full_sentence1 = pre_target1 + preview1 + post_target1
-        sentence1_len = len(full_sentence1)
+        full_sentence = pre_target + preview + post_target
+        sentence_len = len(full_sentence)
         # get boundary location relative to left of screen
-        boundary1_shift = (stimstart_center) + (boundary1_index * char_width)
-        trial_stimuli['boundary1_index'] = boundary1_index
-        trial_stimuli['sentence1_len'] = sentence1_len
-        trial_stimuli['boundary1_shift'] = boundary1_shift
-        trial_stimuli['pre_target1'] = pre_target1
-        trial_stimuli['post_target1'] = post_target1
-        
-        # extract sentence 2
-        sentence2 = trial_stimuli['sentence2']
-        # find the index of 'X' (to be replaced by the preview/target)
-        X2_pos = sentence2.index('X')
-        # get the sentence up to the target word
-        pre_target2 = sentence2[:X2_pos]
-        # get the sentence after the target word
-        post_target2 = sentence2[X2_pos+1:]
-        # find the index of the last letter in the pre-target word
-        boundary2_index = X2_pos - 1
-        # get preview
-        preview2 = trial_stimuli['preview2']
-        # get total sentence length
-        full_sentence2 = pre_target2 + preview2 + post_target2
-        sentence2_len = len(full_sentence2)
-        # get boundary location relative to left of screen
-        boundary2_shift = (stimstart_center) + (boundary2_index * char_width)
-        trial_stimuli['boundary2_index'] = boundary2_index
-        trial_stimuli['sentence2_len'] = sentence2_len
-        trial_stimuli['boundary2_shift'] = boundary2_shift
-        trial_stimuli['pre_target2'] = pre_target2
-        trial_stimuli['post_target2'] = post_target2
+        boundary_shift = (stimstart_center) + (boundary_index * char_width)
+        trial_stimuli['boundary_index'] = boundary_index
+        trial_stimuli['sentence_len'] = sentence_len
+        trial_stimuli['boundary_shift'] = boundary_shift
+        trial_stimuli['pre_target'] = pre_target
+        trial_stimuli['post_target'] = post_target
         stimuli_exp[x] = trial_stimuli
     return stimuli_exp
 
-def split_separate_trials(stimuli_exp):
-    '''
-    Splits the 2 sentences for each word into separate trial stimuli.
-    '''
-    stimuli_split = []
-    for trial_stimuli in stimuli_exp:
-        morph_type = trial_stimuli['morph_type']
-        list_index = trial_stimuli['list_index']
-        indice = trial_stimuli['indice']
-        target = trial_stimuli['target']
-        preview = trial_stimuli['preview1']
-        sentence = trial_stimuli['sentence1']
-        sentence_len = trial_stimuli['sentence1_len']
-        pre_target = trial_stimuli['pre_target1']
-        post_target = trial_stimuli['post_target1']
-        boundary_index = trial_stimuli['boundary1_index']
-        boundary_shift = trial_stimuli['boundary1_shift']
-        stimuli_split.append({'morph_type':morph_type, 'list_index':list_index,
-                              'indice':indice,'target':target,'preview':preview,
-                              'sentence':sentence,'sentence_len':sentence_len,
-                              'pre_target':pre_target,'post_target':post_target,
-                              'boundary_index':boundary_index,
-                              'boundary_shift':boundary_shift})
-        
-        preview = trial_stimuli['preview2']
-        sentence = trial_stimuli['sentence2']
-        sentence_len = trial_stimuli['sentence2_len']
-        pre_target = trial_stimuli['pre_target2']
-        post_target = trial_stimuli['post_target2']
-        boundary_index = trial_stimuli['boundary2_index']
-        boundary_shift = trial_stimuli['boundary2_shift']
-        stimuli_split.append({'morph_type':morph_type, 'list_index':list_index,
-                              'indice':indice,'target':target,'preview':preview,
-                              'sentence':sentence,'sentence_len':sentence_len,
-                              'pre_target':pre_target,'post_target':post_target,
-                              'boundary_index':boundary_index,
-                              'boundary_shift':boundary_shift})
-    return stimuli_split
 
 # display setup
 win = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), fullscr=True,units='pix')
@@ -334,7 +250,6 @@ if not TEST_MODE:
     import pylink
     from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
 
-if not TEST_MODE:
     # Set up eye tracker connection
     tracker = pylink.EyeLink('100.1.1.1')
     tracker.openDataFile('exp.edf')
@@ -357,6 +272,7 @@ if not TEST_MODE:
     tracker.sendCommand('link_event_filter = LEFT,RIGHT,FIXATION,FIXUPDATE,SACCADE,BLINK,BUTTON,INPUT')
     tracker.sendCommand('link_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
 
+
 def transform_to_center_origin(x, y):
     '''
     Transform xy-coordinates based on a top-left origin into
@@ -364,12 +280,14 @@ def transform_to_center_origin(x, y):
     '''
     return int(x - SCREEN_WIDTH_PX // 2), int(SCREEN_HEIGHT_PX // 2 - y)
 
+
 def transform_to_top_left_origin(x, y):
     '''
     Transform xy-coordinates based on a center origin into xy-coordinates
     based on a top-left origin.
     '''
     return int(x + SCREEN_WIDTH_PX // 2), int(SCREEN_HEIGHT_PX // 2 - y)
+
 
 def get_gaze_position():
     '''
@@ -387,6 +305,7 @@ def get_gaze_position():
     else:
         x, y = gaze_sample.getLeftEye().getGaze()
     return transform_to_center_origin(x, y)
+
 
 def perform_calibration(n_trials_until_calibration):
     '''
@@ -415,6 +334,8 @@ def await_gaze_selection(buttons):
     while True:
         if event.getKeys(['c']):
             raise InterruptTrialAndRecalibrate
+        if event.getKeys(['q']):
+            core.quit()
         gaze_position = get_gaze_position()
         for button in buttons:
             if button.contains(gaze_position):
@@ -440,6 +361,10 @@ def await_mouse_selection(buttons):
     mouse.clickReset()
     while True:
         core.wait(TIME_RESOLUTION_SECONDS)
+        if event.getKeys(['c']):
+            raise InterruptTrialAndRecalibrate
+        if event.getKeys(['q']):
+            core.quit()
         if mouse.getPressed()[0]:
             mouse_position = mouse.getPos()
             for button in buttons:
@@ -515,40 +440,6 @@ def abandon_trial():
         return
     tracker.sendMessage('trial_abandoned')
     tracker.stopRecording()
-
-
-def execute(user_data):
-    '''
-    Execute the experiment: Iterate over the trial sequence and run each
-    trial. If the Q key is pressed during a trial, the experiment will be
-    terminated at the end of the trial. If a trial completes
-    successfully, the sequence position is incremented and the current
-    user_data is saved. Once the experiment has been completed the eye
-    tracker recording is saved.
-    '''
-    while user_data['sequence_position'] < len(user_data['trial_sequence']):
-        if event.getKeys(['q']):
-            break
-        trial_type, params = user_data['trial_sequence'][user_data['sequence_position']]
-        trial_func = getattr(trial_type)
-        try:
-            trial_func(**params)
-        except InterruptTrialAndRecalibrate:
-            abandon_trial()
-            n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
-        except InterruptTrialAndExit:
-            abandon_trial()
-            break
-        else:
-            user_data['sequence_position'] += 1
-            save_user_data()
-    visual.TextStim(win,
-        color='black',
-        text='Experiment complete...',
-    ).draw()
-    win.flip()
-    save_tracker_recording(convert_to_asc=True)
-    core.quit()
 
 
 def show_fixation_dot():
@@ -671,7 +562,10 @@ def instructions(image=None, message=None, progression=None):
     n_trials_until_calibration = 0
     if progression == 'button':
         mouse.visible = True
-        selected_button = await_gaze_selection([next])
+        if not TEST_MODE:
+            selected_button = await_gaze_selection([next])
+        else:
+            selected_button = await_mouse_selection([next])
         if selected_button == 'next':
             win.flip()
     else:
@@ -737,7 +631,11 @@ def comprehension_check(pre_target,comprehension_stim):
     '''
     Comprehension check for certain sentences.
     '''
+    render_experimenter_screen_comprehension()
+    if not TEST_MODE:
+        tracker.startRecording(1, 1, 1, 1)
     mouse.setVisible(True)
+    
     if pre_target == 'Fifteen men and women were at the market that day.': statement = 'There were men at the market.'
     
     for trial in comprehension_stim:
@@ -760,13 +658,13 @@ def comprehension_check(pre_target,comprehension_stim):
     true = visual.ImageStim(win,
         image=Path('./images/buttons/true.png',),
         size=BUTTON_SIZE_PX,
-        pos=(-200,-SCREEN_HEIGHT_PX/2+100),
+        pos=(-200,bottom_of_screen_y),
         name='true'
     )
     false = visual.ImageStim(win,
         image=Path('./images/buttons/false.png',),
         size=BUTTON_SIZE_PX,
-        pos=(200,-SCREEN_HEIGHT_PX/2+100),
+        pos=(200,bottom_of_screen_y),
         name='false'
     )
     instructions.draw()
@@ -774,10 +672,15 @@ def comprehension_check(pre_target,comprehension_stim):
     true.draw()
     false.draw()
     win.flip()
-    selected_button = await_gaze_selection([true,false])
+    if not TEST_MODE:
+        selected_button = await_gaze_selection([true,false])
+    else:
+        selected_button = await_mouse_selection([true,false])
     if selected_button == 'true' or selected_button == 'false':
         win.flip()
     mouse.setVisible(TEST_MODE)
+    if not TEST_MODE:
+        tracker.stopRecording()
     return selected_button
 
 
@@ -794,6 +697,8 @@ def practice_trial(trial_stimuli):
         await_fixation_on_fixation_dot()
     except InterruptTrialAndRecalibrate:
         n_trials_until_calibration = perform_calibration()
+    except InterruptTrialAndExit:
+        core.quit()
     visual.TextStim(win,
         text=trial_stimuli,
         color='black',
@@ -913,19 +818,31 @@ practice_stim = import_fillers('practice_stim.txt')
 filler_stim = import_fillers('filler_stim.txt')
 comprehension = import_comprehension('comprehension_stim.csv')
 comprehension_stim, comprehension_stim_lst = comprehension_prep(comprehension)
-stimuli = import_stimuli('experiment_stim.csv')
-choices = pick_sentence_set(stimuli)
-stimuli_exp = stimuli_exp_extraction(stimuli, choices)
-stimuli_exp = boundary(stimuli_exp)
-stimuli_exp = split_separate_trials(stimuli_exp)
-random.shuffle(stimuli_exp)
-user_data.append(stimuli_exp)
 
 # get participant ID
 parser = argparse.ArgumentParser()
 parser.add_argument('user_id', action='store', type=str, help='user ID')
+parser.add_argument('lst_number', action='store', type=str, help='stimuli list number')
 args = parser.parse_args()
 sbj_ID = args.user_id
+sbj_lst = args.lst_number
+
+if sbj_lst == '1':
+    file = 'version1.csv'
+elif sbj_lst == '2':
+    file = 'version2.csv'
+elif sbj_lst == '3':
+    file = 'version3.csv'
+elif sbj_lst == '4':
+    file = 'version4.csv'
+else:
+    print('Error: wrong participant stimuli list number.')
+
+stimuli = import_stimulilst(file)
+stimuli_exp = boundary(stimuli)
+random.shuffle(stimuli_exp)
+user_data.append(stimuli_exp)
+
 
 # set up participant output folder
 user_path = Path('./data')
@@ -953,8 +870,8 @@ for item in practice_stim:
 
 # main experiment
 instructions(message="Congratulations! Now onto the main experiment. Look at 'Next' when ready.",progression='button')
-for item in stimuli_exp:
-    trial_stimuli = item
+for x in range(len(stimuli_exp.keys())):
+    trial_stimuli = stimuli_exp[x]
     pre_target = boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
     if pre_target in comprehension_stim_lst:
         response = comprehension_check(pre_target,comprehension_stim)
@@ -963,5 +880,7 @@ for item in stimuli_exp:
 # save data
 save_user_data(sbj_ID, user_data_path, user_data)
 
+if not TEST_MODE:
+    save_tracker_recording(convert_to_asc=True)
 
 win.close()
