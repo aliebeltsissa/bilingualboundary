@@ -94,7 +94,7 @@ class InterruptTrialAndExit(Exception):
     pass
 
 
-def import_fillers(stimuli_filename):
+def import_txt(stimuli_filename):
     '''
     Import the lists of filler/practice sentences for the experiment.
     '''
@@ -104,53 +104,6 @@ def import_fillers(stimuli_filename):
     data = data[:-1] # remove last \n from text file
     file.close()
     return data
-
-
-def import_comprehension(comprehension_filename):
-    '''
-    Import the list of stimuli for the experiment.
-    '''
-    column_names = ['English','sentence','pre_target','comprehension_statement','TRUE/FALSE']
-    # import file as dataframe
-    df = pd.read_csv(f'./stimuli/{comprehension_filename}', index_col=0)
-    # make dataframe into dictionary
-    temp = df.to_dict("split")
-    temp = dict(zip(temp["index"], temp["data"]))
-    temp_length = len(temp.keys())
-    # replace data by column:data dictionary
-    stimuli = {}
-    for x in range(temp_length):
-        values = list(temp.values())
-        value = values[x]
-        value2 = {column_names[x]: value[x] for x in range(len(column_names))}
-        stimuli[x] = value2
-    return stimuli
-
-
-def comprehension_prep(comprehension_stim):
-    '''
-    Sets up information for use in comprehension questions.
-    '''
-    starts = []
-    for x in range(len(comprehension_stim)): # for each trial
-        # get stimuli for trial
-        trial_stimuli = comprehension_stim[x]
-        # extract each sentence end
-        pre_target = trial_stimuli['pre_target']
-        expected = trial_stimuli['TRUE/FALSE']
-        prompt = trial_stimuli['comprehension_statement']
-        starts.append({'start':pre_target,'prompt':prompt,'expected':expected})
-    # only select some sentences to be tested on
-    n_comprehension = 30 # how many sentences do you want to test the comprehension of?
-    while len(starts) > n_comprehension:
-        random_element = random.choice(starts)
-        starts.remove(random_element)
-    starts_lst = []
-    for x in range(len(starts)):
-        trial = starts[x]
-        start = trial['start']
-        starts_lst.append(start)
-    return starts, starts_lst
 
 
 def import_stimulilst(stimuli_filename):
@@ -174,28 +127,25 @@ def import_stimulilst(stimuli_filename):
     return stimuli
 
 
-def stimuli_exp_extraction(stimuli):
+def import_fillerlst(stimuli_filename):
     '''
-    This forms the sentences each participant is going to see, based
-    on their randomly allocated list for each item.
+    Import the list of stimuli for the experiment.
     '''
-    stimuli_exp = []
-    stimuli_copy = stimuli.copy()
-    sentencen = len(stimuli_copy.keys())
-    indices = list(range(sentencen))
-    for x in range(len(choices)):
-        indice = random.choice(indices)
-        indices.remove(indice)
-        item = stimuli_copy[indice]
-        morph_type = item['morph_type']
-        lst_type = item['lst_type']
-        target = item['target']
-        preview = item['preview']
-        sentence = item['sentence']
-        stimuli_exp.append({'indice':indice,'lst_type':lst_type,
-                        'morph_type':morph_type,'target':target,
-                        'preview':preview,'sentence':sentence})
-    return stimuli_exp
+    column_names = ['filler','question','answer']
+    # import file as dataframe
+    df = pd.read_csv(f'./stimuli/{stimuli_filename}', index_col=0)
+    # make dataframe into dictionary
+    temp = df.to_dict("split")
+    temp = dict(zip(temp["index"], temp["data"]))
+    temp_length = len(temp.keys())
+    # replace data by column:data dictionary
+    stimuli = {}
+    for x in range(temp_length):
+        values = list(temp.values())
+        value = values[x]
+        value2 = {column_names[x]: value[x] for x in range(len(column_names))}
+        stimuli[x] = value2
+    return stimuli
 
 
 def boundary(stimuli_exp):
@@ -229,6 +179,39 @@ def boundary(stimuli_exp):
         trial_stimuli['post_target'] = post_target
         stimuli_exp[x] = trial_stimuli
     return stimuli_exp
+
+
+def blocks(stimuli_exp, filler_stim):
+    '''
+    Split the stimuli into different experimental blocks, interspersed with fillers.
+    '''
+    n_blocks = 4 # 4 experimental blocks
+    n_boundary_perblock = 128/n_blocks # 32 experimental trials per block
+    n_fillers_perblock = 40/n_blocks # 10 filler trials (followed by comprehension check) per block
+
+    for x in stimuli_exp.keys(): # for each experimental trial
+        trial = stimuli_exp[x]
+        trial['type'] = 'trial' # label this as an experimental trial
+        stimuli_exp[x] = trial
+    for x in filler_stim.keys(): # for each filler trial
+        trial = filler_stim[x]
+        trial['type'] = 'filler' # label this as a filler trial
+        filler_stim[x] = trial
+
+    blocked_stimuli = []
+    for x in range(n_blocks):
+        # select next set of exp trials + next set of fillers:
+        block = []
+        for y in range(int(n_boundary_perblock*x),int(n_boundary_perblock*(x+1))): # for next set of experimental trials
+            exp_trial = stimuli_exp[y] # extract each trial
+            block.append(exp_trial) # append to current block
+        for y in range(int(n_fillers_perblock*x),int(n_fillers_perblock*(x+1))): # for next set of filler trials
+            filler_trial = filler_stim[y] # extract each trial
+            block.append(filler_trial) # append to current block
+        
+        random.shuffle(block) # randomly intersperse exp trials & fillers
+        blocked_stimuli.append(block) # add current block to blocked_stimuli list
+    return blocked_stimuli
 
 
 # display setup
@@ -538,7 +521,8 @@ def instructions(image=None, message=None, progression=None):
     '''
     if image:
         visual.ImageStim(win,
-            image=Path(f'./images/instructions/{image}')
+            image=Path(f'./images/instructions/{image}'),
+            interpolate=True,
         ).draw()
     elif message:
         visual.TextStim(win,
@@ -627,7 +611,7 @@ def textbox_input(prompt=''):
     return output
 
 
-def comprehension_check(pre_target,comprehension_stim):
+def comprehension_check(sentence,expected):
     '''
     Comprehension check for certain sentences.
     '''
@@ -635,12 +619,6 @@ def comprehension_check(pre_target,comprehension_stim):
     if not TEST_MODE:
         tracker.startRecording(1, 1, 1, 1)
     mouse.setVisible(True)
-    
-    if pre_target == 'Fifteen men and women were at the market that day.': statement = 'There were men at the market.'
-    
-    for trial in comprehension_stim:
-        if trial['start'] == pre_target:
-            statement = trial['prompt']
 
     instructions = visual.TextStim(win,
         text="Thinking about what you've just read, is this true or false? (Look at your answer)",
@@ -650,7 +628,7 @@ def comprehension_check(pre_target,comprehension_stim):
         pos=top_of_screen
     )
     comprehension = visual.TextStim(win,
-        text=statement,
+        text=sentence,
         color='darkblue',
         height=char_height,
         font='Courier New'
@@ -678,10 +656,20 @@ def comprehension_check(pre_target,comprehension_stim):
         selected_button = await_mouse_selection([true,false])
     if selected_button == 'true' or selected_button == 'false':
         win.flip()
+    if expected == 'T': # if they were supposed to say TRUE
+        if selected_button == 'true': # if the participant said TRUE
+            correct = 'YES' # correct response (hit)
+        if selected_button == 'false': # if theparticipant said FALSE
+            correct = 'NO' # incorrect response (miss)
+    if expected == 'F': # if they were supposed to say FALSE
+        if selected_button == 'true': # if the participant said TRUE
+            correct = 'NO' # incorrect response (false alarm)
+        if selected_button == 'false': # if the participant said FALSE
+            correct = 'YES' # correct response (correct rejection)
     mouse.setVisible(TEST_MODE)
     if not TEST_MODE:
         tracker.stopRecording()
-    return selected_button
+    return selected_button, correct
 
 
 def practice_trial(trial_stimuli):
@@ -708,18 +696,6 @@ def practice_trial(trial_stimuli):
         height=char_height,
         wrapWidth=2000
     ).draw()
-    visual.TextStim(win,
-        text="|",
-        color='black',
-        alignText='center',
-        pos=(-SCREEN_WIDTH_PX/2+40,0)
-    ).draw()
-    visual.TextStim(win,
-        text="|",
-        color='black',
-        alignText='center',
-        pos=(SCREEN_WIDTH_PX/2-40,0)
-    ).draw()
     win.flip()
     if not TEST_MODE:
         tracker.sendMessage('trigger_timer')
@@ -741,6 +717,7 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     Trial where the participant's gaze has to cross a boundary to continue.
     '''
     render_experimenter_screen()
+
     prev_stim, targ_stim = gen_stimuli(trial_stimuli)
     boundary = trial_stimuli['boundary_shift']
     pre_target = trial_stimuli['pre_target']
@@ -748,10 +725,12 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     post_target = trial_stimuli['post_target']
     sentence = pre_target + target + post_target
     end = (stimstart_center) + len(sentence) * char_width
+
     # if necessary, perform calibration
     if n_trials_until_calibration == 0:
         n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
     n_trials_until_calibration -= 1
+
     if not TEST_MODE:
         tracker.startRecording(1,1,1,1)
         tracker.drawText(
@@ -759,47 +738,28 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
         )
         tracker.sendMessage('trial_type boundary_trial')
         tracker.sendMessage(f'target {target}')
+
     show_fixation_dot()
     await_fixation_on_fixation_dot()
+
     prev_stim.draw()
-    visual.TextStim(win,
-        text="|",
-        color='black',
-        alignText='center',
-        pos=(-SCREEN_WIDTH_PX/2+40,0)
-    ).draw()
-    visual.TextStim(win,
-        text="|",
-        color='black',
-        alignText='center',
-        pos=(SCREEN_WIDTH_PX/2-40,0)
-    ).draw()
     win.flip()
+
     targ_stim.draw()
-    visual.TextStim(win,
-        text="|",
-        color='black',
-        alignText='center',
-        pos=(-SCREEN_WIDTH_PX/2+40,0)
-    ).draw()
-    visual.TextStim(win,
-        text="|",
-        color='black',
-        alignText='center',
-        pos=(SCREEN_WIDTH_PX/2-40,0)
-    ).draw()
     await_boundary_cross(boundary)
     win.flip()
+
     if not TEST_MODE:
         tracker.sendMessage('trigger_timer')
     await_boundary_cross(end)
     core.wait(0.5)
     win.flip()
+
     if not TEST_MODE:
         tracker.stopRecording()
     core.wait(2)
     n_completed_trials += 1
-    return pre_target
+    return n_completed_trials, n_trials_until_calibration
 
 
 def save_user_data(sbj_ID, user_data_path, user_data):
@@ -814,10 +774,8 @@ def save_user_data(sbj_ID, user_data_path, user_data):
 
 
 user_data = []
-practice_stim = import_fillers('practice_stim.txt')
-filler_stim = import_fillers('filler_stim.txt')
-comprehension = import_comprehension('comprehension_stim.csv')
-comprehension_stim, comprehension_stim_lst = comprehension_prep(comprehension)
+practice_stim = import_txt('practice_stim.txt')
+practice_stim = [{'sentence':sentence} for sentence in practice_stim]
 
 # get participant ID
 parser = argparse.ArgumentParser()
@@ -841,7 +799,9 @@ else:
 stimuli = import_stimulilst(file)
 stimuli_exp = boundary(stimuli)
 random.shuffle(stimuli_exp)
-user_data.append(stimuli_exp)
+filler_stim = import_fillerlst('filler_sentences.csv')
+blocked_stimuli = blocks(stimuli_exp,filler_stim)
+user_data.append(blocked_stimuli)
 
 
 # set up participant output folder
@@ -857,25 +817,35 @@ instructions(image='welcome_instructions.png')
 n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
 
 # text input prompt
-strangeness_prompt = textbox_input('Did you notice anything strange when reading the sentences?')
-user_data.append(f'Noticed strangeness?: {strangeness_prompt}')
+#strangeness_prompt = textbox_input('Did you notice anything strange when reading the sentences?')
+#user_data.append(f'Noticed strangeness?: {strangeness_prompt}')
 
 # practice trials
-for item in practice_stim:
-    trial_stimuli = item
-    attention_sentence = practice_trial(trial_stimuli)
-    if attention_sentence != '0':
-        selection = comprehension_check(attention_sentence,comprehension_stim)
-        user_data.append({attention_sentence: selection})
+#for item in practice_stim:
+#    trial_stimuli = item
+#    attention_sentence = practice_trial(trial_stimuli['sentence'])
+#    if attention_sentence != '0':
+#        response,correct = comprehension_check('There were men at the market.','T')
+#        user_data.append({attention_sentence: 'There were men at the market','response':response,'correct':correct})
 
 # main experiment
-instructions(message="Congratulations! Now onto the main experiment. Look at 'Next' when ready.",progression='button')
-for x in range(len(stimuli_exp.keys())):
-    trial_stimuli = stimuli_exp[x]
-    pre_target = boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials)
-    if pre_target in comprehension_stim_lst:
-        response = comprehension_check(pre_target,comprehension_stim)
-        user_data.append({pre_target: response})
+instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
+
+for x in range(4): # 4 blocks
+    block_stim = blocked_stimuli[x] # extract stimuli for one block
+    n_trials_until_calibration = perform_calibration(0) # calibrate before the start of each block
+    
+    for trial in block_stim: # for each trial in that block
+        if trial['type'] == 'trial': # if experimental trial, do boundary trial
+            n_completed_trials, n_trials_until_calibration = boundary_trial(trial, n_trials_until_calibration, n_completed_trials)
+        elif trial['type'] == 'filler': # if filler trial, do filler trial, then comprehension check
+            sentence = practice_trial(trial['filler']) # filler trial
+            response,correct = comprehension_check(trial['question'],trial['answer']) # comprehension check
+            user_data.append({'question': trial['question'], 'response': response, 'correct':correct}) # add response to data
+    
+    # after each block, display inter-block break:
+    instructions(message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue.")
+
 
 # save data
 save_user_data(sbj_ID, user_data_path, user_data)
