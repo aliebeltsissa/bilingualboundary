@@ -10,10 +10,6 @@ will exit once the current trial has been completed.
 During eye tracking trials, you can force calibration by pressing the C key
 (for calibrate), which will interrupt the current trial and return to it
 after calibration.
-
-Launch the experiment from the command line with the following arguments:
-    python main.py (sbj_ID) (experiment list number)
-For example: python main.py '1' '2'
 '''
 
 # import packages
@@ -27,32 +23,30 @@ import argparse
 from psychopy import event, visual, core
 import json
 
-
 #######
 # LAB #
 #######
-#DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
-#SCREEN_WIDTH_PX = 1920
-#SCREEN_HEIGHT_PX = 1080
-#SCREEN_WIDTH_MM = 600
+DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
+SCREEN_WIDTH_PX = 1920
+SCREEN_HEIGHT_PX = 1080
+SCREEN_WIDTH_MM = 600
 
-#char_width_mm = 5
-#stimstart_left = 600
-#stimstart_center = -400
+char_width_mm = 5
+stimstart_left = 600
+stimstart_center = -400
 
 
 ##########
 # LAPTOP #
 ##########
-DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
-SCREEN_WIDTH_PX = 1280
-SCREEN_HEIGHT_PX = 720
-SCREEN_WIDTH_MM = 312
+#DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
+#SCREEN_WIDTH_PX = 1280
+#SCREEN_HEIGHT_PX = 720
+#SCREEN_WIDTH_MM = 312
 
-char_width_mm = 3.5
-stimstart_left = 400
-stimstart_center = -600
-
+#char_width_mm = 3.5
+#stimstart_left = 400
+#stimstart_center = -600
 
 
 SCREEN_DISTANCE_MM = 570
@@ -66,14 +60,14 @@ FIXATION_TOLERANCE_PX = 30 # permissible distance from the fixation dot
 TIME_RESOLUTION_SECONDS = 0.01 # time to wait between gaze position polls
 FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/3
 
-TEST_MODE = True # if set to True, use mouse to simulate gaze position
+TEST_MODE = False # if set to True, use mouse to simulate gaze position
 
 INSTRUCTION_CALIBRATION = 'New calibration... Get comfortable...'
 INSTRUCTION_END = 'Experiment complete'
 
 # EXPERIMENTAL SETTINGS
 task_id = 'boundary_exp'
-calibration_freq = 9
+calibration_freq = 16
 px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
 char_width = int(round(char_width_mm * px_per_mm))
 char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO # font size 17 on laptop, 20 in lab
@@ -85,7 +79,6 @@ bottom_of_screen = (0,bottom_of_screen_y)
 
 n_completed_trials = 0
 n_trials_until_calibration = 0
-
 
 class InterruptTrialAndRecalibrate(Exception):
     pass
@@ -155,7 +148,7 @@ def boundary(stimuli_exp):
     for x in range(len(stimuli_exp)): # for each trial
         # get stimuli for trial
         trial_stimuli = stimuli_exp[x]
-        # extract sentence 1
+        # extract sentence
         sentence = trial_stimuli['sentence']
         # find the index of 'X' (to be replaced by the preview/target)
         X_pos = sentence.index('X')
@@ -214,6 +207,165 @@ def blocks(stimuli_exp, filler_stim):
     return blocked_stimuli
 
 
+def import_comprehension(comprehension_filename):
+    '''
+    Import the list of stimuli for the experiment.
+    '''
+    column_names = ['English','sentence','pre_target','comprehension_statement','TRUE/FALSE']
+    # import file as dataframe
+    df = pd.read_csv(f'./stimuli/{comprehension_filename}', index_col=0)
+    # make dataframe into dictionary
+    temp = df.to_dict("split")
+    temp = dict(zip(temp["index"], temp["data"]))
+    temp_length = len(temp.keys())
+    # replace data by column:data dictionary
+    stimuli = {}
+    for x in range(temp_length):
+        values = list(temp.values())
+        value = values[x]
+        value2 = {column_names[x]: value[x] for x in range(len(column_names))}
+        stimuli[x] = value2
+    return stimuli
+
+
+def comprehension_prep(comprehension_stim):
+    '''
+    Sets up information for use in comprehension questions.
+    '''
+    starts = []
+    for x in range(len(comprehension_stim)): # for each trial
+        # get stimuli for trial
+        trial_stimuli = comprehension_stim[x]
+        # extract each sentence end
+        pre_target = trial_stimuli['pre_target']
+        expected = trial_stimuli['TRUE/FALSE']
+        prompt = trial_stimuli['comprehension_statement']
+        starts.append({'start':pre_target,'prompt':prompt,'expected':expected})
+    # only select some sentences to be tested on
+    n_comprehension = 30 # how many sentences do you want to test the comprehension of?
+    while len(starts) > n_comprehension:
+        random_element = random.choice(starts)
+        starts.remove(random_element)
+    starts_lst = []
+    for x in range(len(starts)):
+        trial = starts[x]
+        start = trial['start']
+        starts_lst.append(start)
+    return starts, starts_lst
+
+
+def import_stimuli(stimuli_filename):
+    '''
+    Import the list of stimuli for the experiment.
+    '''
+    column_names = ['morph_type','target','cognate','legal_non',
+                    'illegal_non','sentence1','sentence2']
+    # import file as dataframe
+    df = pd.read_csv(f'./stimuli/{stimuli_filename}', index_col=0)
+    # make dataframe into dictionary
+    temp = df.to_dict("split")
+    temp = dict(zip(temp["index"], temp["data"]))
+    temp_length = len(temp.keys())
+    # replace data by column:data dictionary
+    stimuli = {}
+    for x in range(temp_length):
+        values = list(temp.values())
+        value = values[x]
+        value2 = {column_names[x]: value[x] for x in range(len(column_names))}
+        stimuli[x] = value2
+    return stimuli
+
+def pick_sentence_set(stimuli):
+    '''
+    Choose which of the 4 lists the current participant will receive. 
+    This determines which preview-target combination the participant
+    will be given for each sentence.
+    '''
+    choices = []
+    options = [1,2,3,4]
+    for x in range(len(stimuli.keys())):
+        choice = random.choice(options)
+        choices.append(choice)
+    return choices
+
+def stimuli_exp_extraction(stimuli, choices):
+    '''
+    This forms the sentences each participant is going to see, based
+    on their randomly allocated list for each item.
+    '''
+    stimuli_exp = []
+    stimuli_copy = stimuli.copy()
+    sentencen = len(stimuli_copy.keys())
+    indices = list(range(sentencen))
+    for x in range(len(choices)):
+        list_type = choices[x]
+        indice = random.choice(indices)
+        indices.remove(indice)
+        item = stimuli_copy[indice]
+        morph_type = item['morph_type']
+        target = item['target']
+        cognate = item['cognate']
+        legal_non = item['legal_non']
+        illegal_non = item['illegal_non']
+        sentence1 = item['sentence1']
+        sentence2 = item['sentence2']
+        if list_type == 1:
+            preview1 = target
+            preview2 = legal_non
+        if list_type == 2:
+            preview1 = target
+            preview2 = illegal_non
+        if list_type == 3:
+            preview1 = cognate
+            preview2 = legal_non
+        if list_type == 4:
+            preview1 = cognate
+            preview2 = illegal_non
+        stimuli_exp.append({'indice':indice,'list_index':list_type,
+                        'morph_type':morph_type,'target':target,
+                        'preview1':preview1,'preview2':preview2,
+                        'sentence1':sentence1,'sentence2':sentence2})
+    return stimuli_exp
+
+def split_separate_trials(stimuli_exp):
+    '''
+    Splits the 2 sentences for each word into separate trial stimuli.
+    '''
+    stimuli_split = []
+    for trial_stimuli in stimuli_exp:
+        morph_type = trial_stimuli['morph_type']
+        list_index = trial_stimuli['list_index']
+        indice = trial_stimuli['indice']
+        target = trial_stimuli['target']
+        preview = trial_stimuli['preview1']
+        sentence = trial_stimuli['sentence1']
+        sentence_len = trial_stimuli['sentence1_len']
+        pre_target = trial_stimuli['pre_target1']
+        post_target = trial_stimuli['post_target1']
+        boundary_index = trial_stimuli['boundary1_index']
+        boundary_shift = trial_stimuli['boundary1_shift']
+        stimuli_split.append({'morph_type':morph_type, 'list_index':list_index,
+                              'indice':indice,'target':target,'preview':preview,
+                              'sentence':sentence,'sentence_len':sentence_len,
+                              'pre_target':pre_target,'post_target':post_target,
+                              'boundary_index':boundary_index,
+                              'boundary_shift':boundary_shift})
+        
+        preview = trial_stimuli['preview2']
+        sentence = trial_stimuli['sentence2']
+        sentence_len = trial_stimuli['sentence2_len']
+        pre_target = trial_stimuli['pre_target2']
+        post_target = trial_stimuli['post_target2']
+        boundary_index = trial_stimuli['boundary2_index']
+        boundary_shift = trial_stimuli['boundary2_shift']
+        stimuli_split.append({'morph_type':morph_type, 'list_index':list_index,
+                              'indice':indice,'target':target,'preview':preview,
+                              'sentence':sentence,'sentence_len':sentence_len,
+                              'pre_target':pre_target,'post_target':post_target,
+                              'boundary_index':boundary_index,
+                              'boundary_shift':boundary_shift})
+    return stimuli_split
+
 # display setup
 win = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), fullscr=True,units='pix')
 
@@ -233,6 +385,7 @@ if not TEST_MODE:
     import pylink
     from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
 
+if not TEST_MODE:
     # Set up eye tracker connection
     tracker = pylink.EyeLink('100.1.1.1')
     tracker.openDataFile('exp.edf')
@@ -255,7 +408,6 @@ if not TEST_MODE:
     tracker.sendCommand('link_event_filter = LEFT,RIGHT,FIXATION,FIXUPDATE,SACCADE,BLINK,BUTTON,INPUT')
     tracker.sendCommand('link_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
 
-
 def transform_to_center_origin(x, y):
     '''
     Transform xy-coordinates based on a top-left origin into
@@ -263,14 +415,12 @@ def transform_to_center_origin(x, y):
     '''
     return int(x - SCREEN_WIDTH_PX // 2), int(SCREEN_HEIGHT_PX // 2 - y)
 
-
 def transform_to_top_left_origin(x, y):
     '''
     Transform xy-coordinates based on a center origin into xy-coordinates
     based on a top-left origin.
     '''
     return int(x + SCREEN_WIDTH_PX // 2), int(SCREEN_HEIGHT_PX // 2 - y)
-
 
 def get_gaze_position():
     '''
@@ -288,7 +438,6 @@ def get_gaze_position():
     else:
         x, y = gaze_sample.getLeftEye().getGaze()
     return transform_to_center_origin(x, y)
-
 
 def perform_calibration(n_trials_until_calibration):
     '''
@@ -317,14 +466,12 @@ def await_gaze_selection(buttons):
     while True:
         if event.getKeys(['c']):
             raise InterruptTrialAndRecalibrate
-        if event.getKeys(['q']):
-            core.quit()
         gaze_position = get_gaze_position()
         for button in buttons:
             if button.contains(gaze_position):
                 if button == fixated_button:
                     # still looking at the same button
-                    if gaze_timer.getTime() >= 2:
+                    if gaze_timer.getTime() >= 1:
                         # and gaze has been on button for sufficient time
                         return button.name
                 else: # gaze has moved to different button, reset timer
@@ -344,10 +491,6 @@ def await_mouse_selection(buttons):
     mouse.clickReset()
     while True:
         core.wait(TIME_RESOLUTION_SECONDS)
-        if event.getKeys(['c']):
-            raise InterruptTrialAndRecalibrate
-        if event.getKeys(['q']):
-            core.quit()
         if mouse.getPressed()[0]:
             mouse_position = mouse.getPos()
             for button in buttons:
@@ -423,6 +566,40 @@ def abandon_trial():
         return
     tracker.sendMessage('trial_abandoned')
     tracker.stopRecording()
+
+
+def execute(user_data):
+    '''
+    Execute the experiment: Iterate over the trial sequence and run each
+    trial. If the Q key is pressed during a trial, the experiment will be
+    terminated at the end of the trial. If a trial completes
+    successfully, the sequence position is incremented and the current
+    user_data is saved. Once the experiment has been completed the eye
+    tracker recording is saved.
+    '''
+    while user_data['sequence_position'] < len(user_data['trial_sequence']):
+        if event.getKeys(['q']):
+            break
+        trial_type, params = user_data['trial_sequence'][user_data['sequence_position']]
+        trial_func = getattr(trial_type)
+        try:
+            trial_func(**params)
+        except InterruptTrialAndRecalibrate:
+            abandon_trial()
+            n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
+        except InterruptTrialAndExit:
+            abandon_trial()
+            break
+        else:
+            user_data['sequence_position'] += 1
+            save_user_data()
+    visual.TextStim(win,
+        color='black',
+        text='Experiment complete...',
+    ).draw()
+    win.flip()
+    save_tracker_recording(convert_to_asc=True)
+    core.quit()
 
 
 def show_fixation_dot():
@@ -519,10 +696,11 @@ def instructions(image=None, message=None, progression=None):
     Display an instructional image or message and await a press of the
     space bar to continue.
     '''
+    if not TEST_MODE:
+        tracker.startRecording(1, 1, 1, 1)
     if image:
         visual.ImageStim(win,
-            image=Path(f'./images/instructions/{image}'),
-            interpolate=True,
+            image=Path(f'./images/instructions/{image}')
         ).draw()
     elif message:
         visual.TextStim(win,
@@ -546,15 +724,14 @@ def instructions(image=None, message=None, progression=None):
     n_trials_until_calibration = 0
     if progression == 'button':
         mouse.visible = True
-        if not TEST_MODE:
-            selected_button = await_gaze_selection([next])
-        else:
-            selected_button = await_mouse_selection([next])
+        selected_button = await_gaze_selection([next])
         if selected_button == 'next':
             win.flip()
     else:
         event.waitKeys(keyList=['space'])
         win.flip()
+    if not TEST_MODE:
+        tracker.stopRecording()
     mouse.setVisible(TEST_MODE)
 
 
@@ -712,6 +889,7 @@ def practice_trial(trial_stimuli):
     return attention_sentence
 
 
+
 def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials):
     '''
     Trial where the participant's gaze has to cross a boundary to continue.
@@ -762,16 +940,48 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     return n_completed_trials, n_trials_until_calibration
 
 
-def save_user_data(sbj_ID, user_data_path, user_data):
+def import_fillers(stimuli_filename):
     '''
-    Write the current state of the user_data dictionary to JSON.
+    Import the lists of filler/practice sentences for the experiment.
     '''
-    #modified_time = int(time())
-    path = f'./data/sbj_{sbj_ID}'
-    with open(f'{path}/{sbj_ID}.json', 'w') as file:
-        json.dump(user_data, file, indent='\t')
+    file = open(f"./stimuli/{stimuli_filename}", "r")
+    data = file.read()
+    data = data.split("\n") # split text file into list
+    data = data[:-1] # remove last \n from text file
     file.close()
+    return data
 
+def blocks(stimuli_exp, filler_stim):
+    '''
+    Split the stimuli into different experimental blocks, interspersed with fillers.
+    '''
+    n_blocks = 4 # 4 experimental blocks
+    n_boundary_perblock = 128/n_blocks # 32 experimental trials per block
+    n_fillers_perblock = 40/n_blocks # 10 filler trials (followed by comprehension check) per block
+
+    for x in stimuli_exp.keys(): # for each experimental trial
+        trial = stimuli_exp[x]
+        trial['type'] = 'trial' # label this as an experimental trial
+        stimuli_exp[x] = trial
+    for x in filler_stim.keys(): # for each filler trial
+        trial = filler_stim[x]
+        trial['type'] = 'filler' # label this as a filler trial
+        filler_stim[x] = trial
+
+    blocked_stimuli = []
+    for x in range(n_blocks):
+        # select next set of exp trials + next set of fillers:
+        block = []
+        for y in range(int(n_boundary_perblock*x),int(n_boundary_perblock*(x+1))): # for next set of experimental trials
+            exp_trial = stimuli_exp[y] # extract each trial
+            block.append(exp_trial) # append to current block
+        for y in range(int(n_fillers_perblock*x),int(n_fillers_perblock*(x+1))): # for next set of filler trials
+            filler_trial = filler_stim[y] # extract each trial
+            block.append(filler_trial) # append to current block
+        
+        random.shuffle(block) # randomly intersperse exp trials & fillers
+        blocked_stimuli.append(block) # add current block to blocked_stimuli list
+    return blocked_stimuli
 
 user_data = []
 practice_stim = import_txt('practice_stim.txt')
@@ -828,8 +1038,9 @@ n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
 #        response,correct = comprehension_check('There were men at the market.','T')
 #        user_data.append({attention_sentence: 'There were men at the market','response':response,'correct':correct})
 
+
 # main experiment
-instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
+#instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
 
 for x in range(4): # 4 blocks
     block_stim = blocked_stimuli[x] # extract stimuli for one block
@@ -850,7 +1061,5 @@ for x in range(4): # 4 blocks
 # save data
 save_user_data(sbj_ID, user_data_path, user_data)
 
-if not TEST_MODE:
-    save_tracker_recording(convert_to_asc=True)
 
 win.close()
