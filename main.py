@@ -53,7 +53,7 @@ char_width_mm = 5
 #char_width_mm = 3.5
 
 
-stimstart_left = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 # edge of presentation screen (from L side of screen)
+stimstart_left = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 # edge of presentation screen (from left side of screen)
 stimstart_center = -PRESENTATION_WIDTH_PX/2 # edge of presentation screen (from center of screen)
 
 BUTTON_SIZE_PX = 100 # size of object buttons
@@ -68,7 +68,7 @@ INSTRUCTION_END = 'Experiment complete'
 
 # EXPERIMENTAL SETTINGS
 task_id = 'boundary_exp'
-calibration_freq = 16
+calibration_freq = 16 # after how many trials the calibration occurs
 px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
 char_width = int(round(char_width_mm * px_per_mm))
 char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO # font size 17 on laptop, 20 in lab
@@ -165,7 +165,7 @@ def boundary(stimuli_exp):
         full_sentence = pre_target + preview + post_target
         sentence_len = len(full_sentence)
         # get boundary location relative to left of screen
-        boundary_shift = (stimstart_center) + (boundary_index * char_width)
+        boundary_shift = (stimstart_center) + (boundary_index * char_width) # MAYBE NEEDS TO BE WITH STIMSTART_LEFT?
         trial_stimuli['boundary_index'] = boundary_index
         trial_stimuli['sentence_len'] = sentence_len
         trial_stimuli['boundary_shift'] = boundary_shift
@@ -279,11 +279,12 @@ win = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), fullscr=True,units='pix
 mouse = event.Mouse(visible=True, win=win)
 mouse.clickReset()
 
-fixation_dot = visual.Circle(win,
+fixation_dot = visual.Circle(
+            win,
             lineColor='black',
             radius=SCREEN_WIDTH_PX / 256,
             lineWidth=SCREEN_WIDTH_PX / 256,
-            pos=(stimstart_center,0)
+            pos=(stimstart_center,0),
 )
 
 clock = core.Clock()
@@ -305,7 +306,7 @@ if not TEST_MODE:
     tracker.sendCommand('sample_rate 1000')
     tracker.sendCommand('recording_parse_type = GAZE')
     tracker.sendCommand('select_parser_configuration 0')
-    tracker.sendCommand('calibration_type = HV9') # maybe this is why it's doing 13-point calibration?
+    tracker.sendCommand('calibration_type = HV9') # 9-point calibration
     proportion_w = PRESENTATION_WIDTH_PX / SCREEN_WIDTH_PX
     proportion_h = PRESENTATION_HEIGHT_PX / SCREEN_HEIGHT_PX
     tracker.sendCommand(f'calibration_area_proportion = {proportion_w} {proportion_h}')
@@ -672,7 +673,6 @@ def comprehension_check(sentence,expected):
     render_experimenter_screen_comprehension()
     if not TEST_MODE:
         tracker.startRecording(1, 1, 1, 1)
-    mouse.setVisible(True)
 
     instructions = visual.TextStim(win,
         text="Thinking about what you've just read, is this true or false? (Look at your answer)",
@@ -707,6 +707,7 @@ def comprehension_check(sentence,expected):
     if not TEST_MODE:
         selected_button = await_gaze_selection([true,false])
     else:
+        mouse.setVisible(True)
         selected_button = await_mouse_selection([true,false])
     if selected_button == 'true' or selected_button == 'false':
         win.flip()
@@ -880,31 +881,33 @@ for item in practice_stim:
 
 
 # main experiment
-#n_trials_until_calibration = instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
+n_trials_until_calibration = instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
 
-#for x in range(4): # 4 blocks
-#    block_stim = blocked_stimuli[x] # extract stimuli for one block
-#    n_trials_until_calibration = perform_calibration(0) # calibrate before the start of each block
-#    
-#    for trial in block_stim: # for each trial in that block
-#        if trial['type'] == 'trial': # if experimental trial, do boundary trial
-#            try:
-#                n_completed_trials, n_trials_until_calibration = boundary_trial(trial, n_trials_until_calibration, n_completed_trials)
-#		 user_data.append({''}) # DO THIS
-#            except InterruptTrialAndRecalibrate:
-#                abandon_trial()
-#                n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
-#            except InterruptTrialAndExit:
-#                abandon_trial()
-#                break
-#            
-#        elif trial['type'] == 'filler': # if filler trial, do filler trial, then comprehension check
-#            sentence, n_trials_until_calibration = practice_trial(trial['filler'], n_trials_until_calibration) # filler trial
-#            response,correct = comprehension_check(trial['question'],trial['answer']) # comprehension check
-#            user_data.append({'question': trial['question'], 'response': response, 'correct':correct}) # add response to data
+for x in range(4): # 4 blocks
+    block_stim = blocked_stimuli[x] # extract stimuli for one block
+    n_trials_until_calibration = perform_calibration(0) # calibrate before the start of each block
+    
+    for trial in block_stim: # for each trial in that block
+        if trial['type'] == 'trial': # if experimental trial, do boundary trial
+            try:
+                n_completed_trials, n_trials_until_calibration = boundary_trial(trial, n_trials_until_calibration, n_completed_trials)
+            except InterruptTrialAndRecalibrate:
+                abandon_trial()
+                n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
+            except InterruptTrialAndExit:
+                abandon_trial()
+                core.quit()
+            # get x position of boundary, from left of screen, in pixels:
+            boundary_x = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 + trial['boundary_index']*char_width
+            user_data.append({'target':trial['target'],'boundary_x':boundary_x}) # info to be recorded for each trial
+            
+        elif trial['type'] == 'filler': # if filler trial, do filler trial, then comprehension check
+            sentence, n_trials_until_calibration = practice_trial(trial['filler'], n_trials_until_calibration) # filler trial
+            response,correct = comprehension_check(trial['question'],trial['answer']) # comprehension check
+            user_data.append({'question': trial['question'], 'response': response, 'correct':correct}) # add response to data
     
     # after each block, display inter-block break:
-#    instructions(message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue.")
+    instructions(message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue.")
 
 
 # save data
