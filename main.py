@@ -305,7 +305,7 @@ if not TEST_MODE:
     tracker.sendCommand('sample_rate 1000')
     tracker.sendCommand('recording_parse_type = GAZE')
     tracker.sendCommand('select_parser_configuration 0')
-    tracker.sendCommand('calibration_type = HV13') # maybe this is why it's doing 13-point calibration?
+    tracker.sendCommand('calibration_type = HV9') # maybe this is why it's doing 13-point calibration?
     proportion_w = PRESENTATION_WIDTH_PX / SCREEN_WIDTH_PX
     proportion_h = PRESENTATION_HEIGHT_PX / SCREEN_HEIGHT_PX
     tracker.sendCommand(f'calibration_area_proportion = {proportion_w} {proportion_h}')
@@ -456,10 +456,10 @@ def save_tracker_recording(convert_to_asc=False):
     pylink.pumpDelay(100)
     tracker.closeDataFile()
     pylink.pumpDelay(500)
-    edf_data_path = f'/{sbj_ID}.edf' # maybe needs adjustment
+    edf_data_path = DATA_DIR / 'data' / f'sbj_{sbj_ID}' / f'{sbj_ID}.edf' # maybe needs adjustment
     suffix = 1
     while edf_data_path.exists():
-        edf_data_path = f'/{sbj_ID}_{suffix}.edf' # maybe needs adjustment
+        edf_data_path = DATA_DIR / 'data' / f'sbj_{sbj_ID}' / f'{sbj_ID}_{suffix}.edf' # maybe needs adjustment
         suffix += 1
     tracker.receiveDataFile('exp.edf', str(edf_data_path))
     tracker.close()
@@ -873,42 +873,45 @@ n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
 # practice trials
 for item in practice_stim:
     trial_stimuli = item
-    attention_sentence, n_trials_until_calibration = practice_trial(trial_stimuli['sentence'])
+    attention_sentence, n_trials_until_calibration = practice_trial(trial_stimuli['sentence'],n_trials_until_calibration)
     if attention_sentence != '0':
         response,correct = comprehension_check('There were men at the market.','T')
         user_data.append({attention_sentence: 'There were men at the market','response':response,'correct':correct})
 
 
 # main experiment
-n_trials_until_calibration = instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
+#n_trials_until_calibration = instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
 
-for x in range(4): # 4 blocks
-    block_stim = blocked_stimuli[x] # extract stimuli for one block
-    n_trials_until_calibration = perform_calibration(0) # calibrate before the start of each block
-    
-    for trial in block_stim: # for each trial in that block
-        if trial['type'] == 'trial': # if experimental trial, do boundary trial
-            try:
-                n_completed_trials, n_trials_until_calibration = boundary_trial(trial, n_trials_until_calibration, n_completed_trials)
-            except InterruptTrialAndRecalibrate:
-                abandon_trial()
-                n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
-            except InterruptTrialAndExit:
-                abandon_trial()
-                break
-            
-        elif trial['type'] == 'filler': # if filler trial, do filler trial, then comprehension check
-            sentence, n_trials_until_calibration = practice_trial(trial['filler']) # filler trial
-            response,correct = comprehension_check(trial['question'],trial['answer']) # comprehension check
-            user_data.append({'question': trial['question'], 'response': response, 'correct':correct}) # add response to data
+#for x in range(4): # 4 blocks
+#    block_stim = blocked_stimuli[x] # extract stimuli for one block
+#    n_trials_until_calibration = perform_calibration(0) # calibrate before the start of each block
+#    
+#    for trial in block_stim: # for each trial in that block
+#        if trial['type'] == 'trial': # if experimental trial, do boundary trial
+#            try:
+#                n_completed_trials, n_trials_until_calibration = boundary_trial(trial, n_trials_until_calibration, n_completed_trials)
+#		 user_data.append({''}) # DO THIS
+#            except InterruptTrialAndRecalibrate:
+#                abandon_trial()
+#                n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
+#            except InterruptTrialAndExit:
+#                abandon_trial()
+#                break
+#            
+#        elif trial['type'] == 'filler': # if filler trial, do filler trial, then comprehension check
+#            sentence, n_trials_until_calibration = practice_trial(trial['filler'], n_trials_until_calibration) # filler trial
+#            response,correct = comprehension_check(trial['question'],trial['answer']) # comprehension check
+#            user_data.append({'question': trial['question'], 'response': response, 'correct':correct}) # add response to data
     
     # after each block, display inter-block break:
-    instructions(message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue.")
+#    instructions(message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue.")
 
 
 # save data
-user_data['modified_time'] = int(time())
-with open(user_data_path, 'w') as file:
+user_data.append(int(time()))
+
+fl = user_data_path/f'sbj_{sbj_ID}.json'
+with open(fl, 'w') as file:
     json.dump(user_data, file, indent='\t')
 
 save_tracker_recording()
