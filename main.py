@@ -10,6 +10,10 @@ will exit once the current trial has been completed.
 During eye tracking trials, you can force calibration by pressing the C key
 (for calibrate), which will interrupt the current trial and return to it
 after calibration.
+
+Must be launched from the command line with the following arguments:
+python main.py <sbj_id> <list_number>
+For example: python main.py 1 1
 '''
 
 # import packages
@@ -52,8 +56,8 @@ char_width_mm = 5
 
 #char_width_mm = 3.5
 
-
-stimstart_left = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 # edge of presentation screen (from left side of screen)
+# DON'T KNOW WHY: the math is correct, but for some reason without the (+40) the sentences appear too far left - (0,0) is 40px off-screen
+stimstart_left = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 + 40 # edge of presentation screen (from left side of screen)
 stimstart_center = -PRESENTATION_WIDTH_PX/2 # edge of presentation screen (from center of screen)
 
 BUTTON_SIZE_PX = 100 # size of object buttons
@@ -61,7 +65,7 @@ FIXATION_TOLERANCE_PX = 30 # permissible distance from the fixation dot
 TIME_RESOLUTION_SECONDS = 0.01 # time to wait between gaze position polls
 FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/3
 
-TEST_MODE = False # if set to True, use mouse to simulate gaze position
+TEST_MODE = True # if set to True, use mouse to simulate gaze position
 
 INSTRUCTION_CALIBRATION = 'New calibration... Get comfortable...'
 INSTRUCTION_END = 'Experiment complete'
@@ -164,8 +168,8 @@ def boundary(stimuli_exp):
         # get total sentence length
         full_sentence = pre_target + preview + post_target
         sentence_len = len(full_sentence)
-        # get boundary location relative to left of screen
-        boundary_shift = (stimstart_center) + (boundary_index * char_width) # MAYBE NEEDS TO BE WITH STIMSTART_LEFT?
+        # get boundary location relative to center of screen
+        boundary_shift = (stimstart_center) + (boundary_index * char_width)
         trial_stimuli['boundary_index'] = boundary_index
         trial_stimuli['sentence_len'] = sentence_len
         trial_stimuli['boundary_shift'] = boundary_shift
@@ -872,12 +876,12 @@ n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
 #user_data.append(f'Noticed strangeness?: {strangeness_prompt}')
 
 # practice trials
-for item in practice_stim:
-    trial_stimuli = item
-    attention_sentence, n_trials_until_calibration = practice_trial(trial_stimuli['sentence'],n_trials_until_calibration)
-    if attention_sentence != '0':
-        response,correct = comprehension_check('There were men at the market.','T')
-        user_data.append({attention_sentence: 'There were men at the market','response':response,'correct':correct})
+#for item in practice_stim:
+#    trial_stimuli = item
+#    attention_sentence, n_trials_until_calibration = practice_trial(trial_stimuli['sentence'],n_trials_until_calibration)
+#    if attention_sentence != '0':
+#        response,correct = comprehension_check('There were men at the market.','T')
+#        user_data.append({attention_sentence: 'There were men at the market','response':response,'correct':correct})
 
 
 # main experiment
