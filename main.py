@@ -42,8 +42,8 @@ PRESENTATION_HEIGHT_PX = 720
 # LAB #
 #######
 DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
-SCREEN_WIDTH_PX = 1680
-SCREEN_HEIGHT_PX = 1050
+SCREEN_WIDTH_PX = 1920
+SCREEN_HEIGHT_PX = 1080
 SCREEN_WIDTH_MM = 600
 
 char_width_mm = 6
@@ -60,7 +60,7 @@ char_width_mm = 6
 #char_width_mm = 3.5
 
 # number of pixels to adjust display of things on screen - no idea why this works, just know that it does
-magic_number = 158
+magic_number = 40
 
 # DON'T KNOW WHY: the math is correct, but for some reason without the magic number the sentences appear too far left
 stimstart_left = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 + magic_number # edge of presentation screen (from left side of screen)
@@ -68,7 +68,7 @@ stimstart_center = -PRESENTATION_WIDTH_PX/2 # edge of presentation screen (from 
 
 BUTTON_SIZE_PX = 100 # size of object buttons
 FIXATION_TOLERANCE_PX = 18 # permissible distance from the fixation dot
-TIME_RESOLUTION_SECONDS = 0.01 # time to wait between gaze position polls
+TIME_RESOLUTION_SECONDS = 0.002 # time to wait between gaze position polls
 FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/3
 
 TEST_MODE = True # if set to True, use mouse to simulate gaze position
@@ -797,8 +797,6 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
         n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
     n_trials_until_calibration -= 1
 
-    win.recordFrameIntervals = True
-
     #if not TEST_MODE:
     render_experimenter_screen(boundary)
     tracker.startRecording(1,1,1,1)
@@ -806,14 +804,16 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     tracker.sendMessage(f'target {target}')
 
     show_fixation_dot()
-    await_fixation_on_fixation_dot()
-
     prev_stim.draw()
+    await_fixation_on_fixation_dot()
     win.flip()
 
     targ_stim.draw()
     await_boundary_cross(boundary)
+    pre_flip = clock.getTime(applyZero=True) * 1000 # time in s transformed to ms
     win.flip()
+    post_flip = clock.getTime(applyZero=True) * 1000 # time in s transformed to ms
+    flip_time = post_flip - pre_flip
 
     if not TEST_MODE:
         tracker.sendMessage('trigger_timer')
@@ -825,10 +825,8 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
         tracker.stopRecording()
     core.wait(2)
 
-    win.recordFrameIntervals = False
-
     n_completed_trials += 1
-    return n_completed_trials, n_trials_until_calibration
+    return flip_time,n_completed_trials, n_trials_until_calibration
 
 
 
@@ -887,6 +885,7 @@ n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
 # main experiment
 #n_trials_until_calibration = instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
 
+flips = []
 for x in range(4): # 4 blocks
     block_stim = blocked_stimuli[x] # extract stimuli for one block
     if x>0: 
@@ -895,12 +894,15 @@ for x in range(4): # 4 blocks
     for trial in block_stim: # for each trial in that block
         if trial['type'] == 'trial': # if experimental trial, do boundary trial
             try:
-                n_completed_trials, n_trials_until_calibration = boundary_trial(trial, n_trials_until_calibration, n_completed_trials)
+                flip_time,n_completed_trials, n_trials_until_calibration = boundary_trial(trial, n_trials_until_calibration, n_completed_trials)
+                flips.append(flip_time)
             except InterruptTrialAndRecalibrate:
                 abandon_trial()
                 n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
             except InterruptTrialAndExit:
-                win.saveFrameIntervals(fileName=None, clear=True)
+                fl = user_data_path/f'sbj_{sbj_ID}_fiptimes.txt'
+                with open(fl, 'w') as file:
+                    json.dump(flips, file, indent='\t')
                 abandon_trial()
                 core.quit()
             # get x position of boundary, from left of screen, in pixels:
