@@ -19,17 +19,18 @@ IMPORTANT: Change participant ID & number directly in the script below
 (ln. 38-39).
 '''
 
-# import packages
 import collections.abc
-collections.Callable = collections.abc.Callable
-import os
+from os import system
 from time import time
 import random
 from pathlib import Path
-import pandas as pd
 import argparse
-from psychopy import event, visual, core, monitors
 import json
+import pandas as pd
+from psychopy import event, visual, core, monitors
+import pylink
+from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
+collections.Callable = collections.abc.Callable
 
 
 SCREEN_DISTANCE_MM = 570
@@ -59,12 +60,16 @@ char_width_mm = 6
 
 #char_width_mm = 3.5
 
-# number of pixels to adjust display of things on screen - no idea why this works, just know that it does
+# number of pixels to adjust display of things on screen
+# no idea why this works, just know that it does
 magic_number = 40
 
-# DON'T KNOW WHY: the math is correct, but for some reason without the magic number the sentences appear too far left
-stimstart_left = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 + magic_number # edge of presentation screen (from left side of screen)
-stimstart_center = -PRESENTATION_WIDTH_PX/2 # edge of presentation screen (from center of screen)
+# DON'T KNOW WHY: the math is correct
+# but for some reason without the magic number the sentences appear too far left
+stimstart_left = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 + magic_number
+# edge of presentation screen (from left side of screen)
+stimstart_center = -PRESENTATION_WIDTH_PX/2
+# edge of presentation screen (from center of screen)
 
 BUTTON_SIZE_PX = 100 # size of object buttons
 FIXATION_TOLERANCE_PX = 18 # permissible distance from the fixation dot
@@ -92,9 +97,15 @@ n_completed_trials = 0
 n_trials_until_calibration = 0
 
 class InterruptTrialAndRecalibrate(Exception):
+    '''
+    Stop the trial in progress and do a calibration.
+    '''
     pass
 
 class InterruptTrialAndExit(Exception):
+    '''
+    Stop the trial in progress and exit the experiment.
+    '''
     pass
 
 
@@ -102,11 +113,10 @@ def import_txt(stimuli_filename):
     '''
     Import the lists of filler/practice sentences for the experiment.
     '''
-    file = open(f"./stimuli/{stimuli_filename}", "r")
-    data = file.read()
-    data = data.split("\n") # split text file into list
-    data = data[:-1] # remove last \n from text file
-    file.close()
+    with open("./stimuli/{stimuli_filename}", "r", encoding="utf8") as stimuli_file:
+        data = stimuli_file.read()
+        data = data.split("\n") # split text file into list
+        data = data[:-1] # remove last \n from text file
     return data
 
 
@@ -156,9 +166,7 @@ def boundary(stimuli_exp):
     '''
     Generate info on boundary.
     '''
-    for x in range(len(stimuli_exp)): # for each trial
-        # get stimuli for trial
-        trial_stimuli = stimuli_exp[x]
+    for x, trial_stimuli in enumerate(stimuli_exp):# for each trial
         # extract sentence
         sentence = trial_stimuli['sentence']
         # find the index of 'X' (to be replaced by the preview/target)
@@ -206,13 +214,14 @@ def blocks(stimuli_exp, filler_stim):
     for x in range(n_blocks):
         # select next set of exp trials + next set of fillers:
         block = []
-        for y in range(int(n_boundary_perblock*x),int(n_boundary_perblock*(x+1))): # for next set of experimental trials
+        for y in range(int(n_boundary_perblock*x),int(n_boundary_perblock*(x+1))):
+            # for next set of experimental trials
             exp_trial = stimuli_exp[y] # extract each trial
             block.append(exp_trial) # append to current block
-        for y in range(int(n_fillers_perblock*x),int(n_fillers_perblock*(x+1))): # for next set of filler trials
+        for y in range(int(n_fillers_perblock*x),int(n_fillers_perblock*(x+1))):
+            # for next set of filler trials
             filler_trial = filler_stim[y] # extract each trial
             block.append(filler_trial) # append to current block
-        
         random.shuffle(block) # randomly intersperse exp trials & fillers
         blocked_stimuli.append(block) # add current block to blocked_stimuli list
     return blocked_stimuli
@@ -243,11 +252,10 @@ def import_fillers(stimuli_filename):
     '''
     Import the lists of filler/practice sentences for the experiment.
     '''
-    file = open(f"./stimuli/{stimuli_filename}", "r")
-    data = file.read()
-    data = data.split("\n") # split text file into list
-    data = data[:-1] # remove last \n from text file
-    file.close()
+    with open(f"./stimuli/{stimuli_filename}", "r", encoding="utf-8") as file:
+        data = file.read()
+        data = data.split("\n") # split text file into list
+        data = data[:-1] # remove last \n from text file
     return data
 
 def blocks(stimuli_exp, filler_stim):
@@ -271,13 +279,15 @@ def blocks(stimuli_exp, filler_stim):
     for x in range(n_blocks):
         # select next set of exp trials + next set of fillers:
         block = []
-        for y in range(int(n_boundary_perblock*x),int(n_boundary_perblock*(x+1))): # for next set of experimental trials
+        for y in range(int(n_boundary_perblock*x),int(n_boundary_perblock*(x+1))):
+            # for next set of experimental trials
             exp_trial = stimuli_exp[y] # extract each trial
             block.append(exp_trial) # append to current block
-        for y in range(int(n_fillers_perblock*x),int(n_fillers_perblock*(x+1))): # for next set of filler trials
+        for y in range(int(n_fillers_perblock*x),int(n_fillers_perblock*(x+1))):
+            # for next set of filler trials
             filler_trial = filler_stim[y] # extract each trial
             block.append(filler_trial) # append to current block
-        
+
         random.shuffle(block) # randomly intersperse exp trials & fillers
         blocked_stimuli.append(block) # add current block to blocked_stimuli list
     return blocked_stimuli
@@ -286,7 +296,9 @@ def blocks(stimuli_exp, filler_stim):
 # display setup
 monitor = monitors.Monitor('monitor', width=SCREEN_WIDTH_PX, distance = SCREEN_DISTANCE_MM)
 monitor.setSizePix = ((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX))
-win = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX), monitor=monitor, fullscr=True, winType='pyglet', units='pix', allowStencil=True)
+win = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX),
+                    monitor=monitor, fullscr=True, winType='pyglet',
+                    units='pix', allowStencil=True)
 
 mouse = event.Mouse(visible=True, win=win)
 mouse.clickReset()
@@ -303,8 +315,6 @@ clock = core.Clock()
 
 #if not TEST_MODE:
     # Set up eye tracker connection
-import pylink
-from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
 tracker = pylink.EyeLink('100.1.1.1')
 tracker.openDataFile('exp.edf')
 tracker.sendCommand("add_file_preamble_text 'Experiment 1'")
@@ -312,7 +322,7 @@ pylink.openGraphicsEx(EyeLinkCoreGraphicsPsychoPy(tracker, win))
 tracker.setOfflineMode()
 pylink.pumpDelay(100)
 tracker.sendCommand(f'screen_pixel_coords = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
-tracker.sendMessage(f'DISPLAY_COORDS = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}') 
+tracker.sendMessage(f'DISPLAY_COORDS = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
 tracker.sendCommand('sample_rate 1000')
 tracker.sendCommand('recording_parse_type = GAZE')
 tracker.sendCommand('select_parser_configuration 0')
@@ -470,12 +480,12 @@ def save_tracker_recording(convert_to_asc=False):
     edf_data_path = DATA_DIR / 'data' / f'sbj_{sbj_ID}' / f'{sbj_ID}.edf' # maybe needs adjustment
     suffix = 1
     while edf_data_path.exists():
-        edf_data_path = DATA_DIR / 'data' / f'sbj_{sbj_ID}' / f'{sbj_ID}_{suffix}.edf' # maybe needs adjustment
+        edf_data_path = DATA_DIR / 'data' / f'sbj_{sbj_ID}' / f'{sbj_ID}_{suffix}.edf'
+        # maybe needs adjustment
         suffix += 1
     tracker.receiveDataFile('exp.edf', str(edf_data_path))
     tracker.close()
     if convert_to_asc:
-        from os import system
         system(f'edf2asc {edf_data_path}')
 
 
@@ -508,21 +518,21 @@ def render_experimenter_screen(boundary=0):
     tracker.clearScreen(color=0)
 
     tracker.drawLine(
-        (stimstart_left - magic_number, SCREEN_HEIGHT_PX // 2), 
-        (SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX // 2), 
+        (stimstart_left - magic_number, SCREEN_HEIGHT_PX // 2),
+        (SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX // 2),
         color=1
     )
-    
+
     tracker.drawLine(
-        (stimstart_left - magic_number, SCREEN_HEIGHT_PX), 
-        (stimstart_left - magic_number, -SCREEN_HEIGHT_PX), 
+        (stimstart_left - magic_number, SCREEN_HEIGHT_PX),
+        (stimstart_left - magic_number, -SCREEN_HEIGHT_PX),
         color=1
     )
-    
+
     # why is this correct?
     tracker.drawLine(
-        (boundary + SCREEN_WIDTH_PX // 2, SCREEN_HEIGHT_PX), 
-        (boundary + SCREEN_WIDTH_PX // 2, -SCREEN_HEIGHT_PX), 
+        (boundary + SCREEN_WIDTH_PX // 2, SCREEN_HEIGHT_PX),
+        (boundary + SCREEN_WIDTH_PX // 2, -SCREEN_HEIGHT_PX),
         color=2
     )
 
@@ -536,7 +546,7 @@ def render_experimenter_screen(boundary=0):
     tracker.drawText(
         f'"Trial {n_completed_trials + 1} ({n_trials_until_calibration})"'
     )
-    
+
 
 def gen_stimuli(stimuli):
     '''
@@ -556,7 +566,7 @@ def gen_stimuli(stimuli):
             height=char_height,
             text=preview_sentence,
             wrapWidth=2000
-        )
+    )
     targ_stim = visual.TextStim(win,
             color='black',
             font='Courier New',
@@ -565,7 +575,7 @@ def gen_stimuli(stimuli):
             height=char_height,
             text=target_sentence,
             wrapWidth=2000
-        )
+    )
     return prev_stim, targ_stim
 
 
@@ -590,13 +600,13 @@ def instructions(image=None, message=None, progression=None):
             pos=(0,0)
         ).draw()
     if progression == 'button':
-        next = visual.ImageStim(win,
+        next_button = visual.ImageStim(win,
             image=Path('./images/buttons/next.png',),
             size=BUTTON_SIZE_PX,
             pos=bottom_of_screen,
-            name='next'
+            name='next_button'
         )
-        next.draw()
+        next_button.draw()
     win.flip()
 
     n_trials_until_calibration = 0
@@ -615,6 +625,9 @@ def instructions(image=None, message=None, progression=None):
 
 
 def textbox_input(prompt=''):
+    '''
+    Create a textbox in which a participant can type.
+    '''
     instruction = visual.TextStim(win,
         text=prompt,
         font='Courier New',
@@ -631,7 +644,7 @@ def textbox_input(prompt=''):
         pos=bottom_of_screen
     )
 
-    text_box = visual.TextBox2(win, 
+    text_box = visual.TextBox2(win,
         text='|', # cursor for where you're typing
         color='black',
         font='Courier New',
@@ -658,8 +671,9 @@ def textbox_input(prompt=''):
             elif keys[0] == 'period':
                 text_box.text = text_box.text[:-1] + '.|'
             elif len(keys[0]) == 1:
-                text_box.text = text_box.text[:-1] + keys[0] + '|' # Add the pressed key to the text box
-        
+                text_box.text = text_box.text[:-1] + keys[0] + '|'
+                # Add the pressed key to the text box
+
         instruction.draw()
         progression.draw()
         text_box.draw()
@@ -711,15 +725,13 @@ def comprehension_check(sentence,expected):
         selected_button = await_mouse_selection([true,false])
     if selected_button == 'true' or selected_button == 'false':
         win.flip()
-    if expected == 'T': # if they were supposed to say TRUE
-        if selected_button == 'true': # if the participant said TRUE
-            correct = 'YES' # correct response (hit)
-        if selected_button == 'false': # if theparticipant said FALSE
-            correct = 'NO' # incorrect response (miss)
-    if expected == 'F': # if they were supposed to say FALSE
-        if selected_button == 'true': # if the participant said TRUE
-            correct = 'NO' # incorrect response (false alarm)
-        if selected_button == 'false': # if the participant said FALSE
+    if expected == 'T' and selected_button == 'true':
+        correct = 'YES' # correct response (hit)
+    elif expected == 'T' and selected_button == 'false':
+        correct = 'NO' # incorrect response (miss)
+    elif expected == 'F' and selected_button == 'true':
+        correct = 'NO' # incorrect response (false alarm)
+    elif expected == 'F' and selected_button == 'false':
             correct = 'YES' # correct response (correct rejection)
     mouse.setVisible(TEST_MODE)
     if not TEST_MODE:
@@ -764,7 +776,7 @@ def practice_trial(trial_stimuli,n_trials_until_calibration):
 
     await_boundary_cross(end)
     core.wait(0.5)
-    
+
     win.flip()
 
     if not TEST_MODE:
@@ -783,13 +795,15 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     Trial where the participant's gaze has to cross a boundary to continue.
     '''
     prev_stim, targ_stim = gen_stimuli(trial_stimuli)
-    # -4 added since the boundary was otherwise in the space instead of immediately at the end of the previous word
+    # -4 added since the boundary was otherwise
+    # in the space instead of immediately at the end of the previous word
     boundary = trial_stimuli['boundary_shift'] -4
     pre_target = trial_stimuli['pre_target']
     target = trial_stimuli['target']
     post_target = trial_stimuli['post_target']
     sentence = pre_target + target + post_target
-    # -6 added since the boundary was otherwise in the space instead of immediately at the end of the final word
+    # -6 added since the boundary was otherwise
+    # in the space instead of immediately at the end of the final word
     end = (stimstart_center) + len(sentence) * char_width -6
 
     # if necessary, perform calibration
@@ -876,44 +890,59 @@ n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
 # practice trials
 #for item in practice_stim:
 #    trial_stimuli = item
-#    attention_sentence, n_trials_until_calibration = practice_trial(trial_stimuli['sentence'],n_trials_until_calibration)
+#    attention_sentence, n_trials_until_calibration = practice_trial(trial_stimuli['sentence'],
+#       n_trials_until_calibration)
 #    if attention_sentence != '0':
 #        response,correct = comprehension_check('There were men at the market.','T')
-#        user_data.append({attention_sentence: 'There were men at the market','response':response,'correct':correct})
+#        user_data.append({attention_sentence: 'There were men at the market',
+#           'response':response,'correct':correct})
 
 
 # main experiment
-#n_trials_until_calibration = instructions(message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button')
+#n_trials_until_calibration = instructions(
+# message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",
+# progression='button')
 
 flips = []
 for x in range(4): # 4 blocks
     block_stim = blocked_stimuli[x] # extract stimuli for one block
-    if x>0: 
-        n_trials_until_calibration = perform_calibration(0) # calibrate before the start of each block, except the first (when there's anyway a calibration)
-    
+    if x>0:
+        n_trials_until_calibration = perform_calibration(0)
+        # calibrate before the start of each block,
+        # except the first (when there's anyway a calibration)
+
     for trial in block_stim: # for each trial in that block
         if trial['type'] == 'trial': # if experimental trial, do boundary trial
             try:
-                flip_time,n_completed_trials, n_trials_until_calibration = boundary_trial(trial, n_trials_until_calibration, n_completed_trials)
+                flip_time,n_completed_trials, n_trials_until_calibration = boundary_trial(
+                    trial, n_trials_until_calibration, n_completed_trials)
                 flips.append(flip_time)
             except InterruptTrialAndRecalibrate:
                 abandon_trial()
                 n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
             except InterruptTrialAndExit:
                 fl = user_data_path/f'sbj_{sbj_ID}_fiptimes.txt'
-                with open(fl, 'w') as file:
+                with open(fl, 'w',encoding="utf-8") as file:
                     json.dump(flips, file, indent='\t')
                 abandon_trial()
                 core.quit()
             # get x position of boundary, from left of screen, in pixels:
-            boundary_x = (SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2 + (trial['boundary_index']-4)*char_width
-            user_data.append({'target':trial['target'],'boundary_x':boundary_x}) # info to be recorded for each trial
-            
+            boundary_x=(SCREEN_WIDTH_PX-PRESENTATION_WIDTH_PX)/2+(trial['boundary_index']-4)*char_width
+            # info to be recorded for each trial:
+            user_data.append({'target':trial['target'],'boundary_x':boundary_x})
+
+
         elif trial['type'] == 'filler': # if filler trial, do filler trial, then comprehension check
             try:
-                sentence, n_trials_until_calibration = practice_trial(trial['filler'], n_trials_until_calibration) # filler trial
-                response,correct = comprehension_check(trial['question'],trial['answer']) # comprehension check
-                user_data.append({'question': trial['question'], 'response': response, 'correct':correct}) # add response to data
+                # filler trial:
+                sentence, n_trials_until_calibration = practice_trial(
+                    trial['filler'], n_trials_until_calibration)
+                # comprehension check:
+                response,correct = comprehension_check(trial['question'],trial['answer'])
+                # add response to data:
+                user_data.append(
+                    {'question': trial['question'], 'response': response, 'correct':correct}
+                )
             except InterruptTrialAndRecalibrate:
                 abandon_trial()
                 n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
@@ -922,20 +951,24 @@ for x in range(4): # 4 blocks
                 core.quit()
 
     # after each block, display inter-block break:
-    n_trials_until_calibration = instructions(message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue.")
+    n_trials_until_calibration = instructions(
+        message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue."
+    )
 
 # text input prompt
 strangeness_prompt = textbox_input('Did you notice anything strange when reading the sentences?')
 user_data.append(f'Noticed strangeness?: {strangeness_prompt}')
 
 # debrief
-instructions(message="You've finished the experiment! This experiment aimed at testing how quickly people process key words in the sentences, based on what word we put in its place before your eyes moved to that location. These preview words had different links to the target word (they were the real word, or the Italian translation, or just had letters in common, or nothing in common). The experiment aims at understanding which of these different preview types helped you process the target word the most. Thanks for your participation!")
+instructions(
+    message="You've finished the experiment! This experiment aimed at testing how quickly people process key words in the sentences, based on what word we put in its place before your eyes moved to that location. These preview words had different links to the target word (they were the real word, or the Italian translation, or just had letters in common, or nothing in common). The experiment aims at understanding which of these different preview types helped you process the target word the most. Thanks for your participation!"
+)
 
 # save data
 user_data.append(int(time()))
 
 fl = user_data_path/f'sbj_{sbj_ID}.json'
-with open(fl, 'w') as file:
+with open(fl, 'w', encoding='utf-8') as file:
     json.dump(user_data, file, indent='\t')
 
 save_tracker_recording()
