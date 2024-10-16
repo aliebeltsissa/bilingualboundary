@@ -76,7 +76,7 @@ FIXATION_TOLERANCE_PX = 18 # permissible distance from the fixation dot
 TIME_RESOLUTION_SECONDS = 0.002 # time to wait between gaze position polls
 FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/3
 
-TEST_MODE = True # if set to True, use mouse to simulate gaze position
+TEST_MODE = False # if set to True, use mouse to simulate gaze position
 
 INSTRUCTION_CALIBRATION = 'New calibration... Get comfortable...'
 INSTRUCTION_END = 'Experiment complete'
@@ -113,7 +113,7 @@ def import_txt(stimuli_filename):
     '''
     Import the lists of filler/practice sentences for the experiment.
     '''
-    with open("./stimuli/{stimuli_filename}", "r", encoding="utf8") as stimuli_file:
+    with open(f"./stimuli/{stimuli_filename}", "r", encoding='utf-8') as stimuli_file:
         data = stimuli_file.read()
         data = data.split("\n") # split text file into list
         data = data[:-1] # remove last \n from text file
@@ -166,7 +166,9 @@ def boundary(stimuli_exp):
     '''
     Generate info on boundary.
     '''
-    for x, trial_stimuli in enumerate(stimuli_exp):# for each trial
+    for x in range(len(stimuli_exp)): # for each trial
+        # get stimuli for trial
+        trial_stimuli = stimuli_exp[x]
         # extract sentence
         sentence = trial_stimuli['sentence']
         # find the index of 'X' (to be replaced by the preview/target)
