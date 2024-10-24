@@ -1,5 +1,5 @@
 '''
-This code was written for PsychoPy version 2023.2.3, and is intended to be
+This code was written for PsychoPy version 2020.2.3 and Python 3.6.6, and is intended to be
 used with an EyeLink 1000 eye tracker. It needs PyLink and 
 EyeLinkCoreGraphicsPsychoPy. Alternatively, set TEST_MODE to True and use 
 the mouse to simulate the gaze position.
@@ -20,6 +20,9 @@ IMPORTANT: Change participant ID & number directly in the script below
 '''
 
 import collections.abc
+collections.Callable = collections.abc.Callable
+import psychopy
+#psychopy.useVersion('2020.2.3')
 from os import system
 from time import time
 import random
@@ -30,7 +33,7 @@ import pandas as pd
 from psychopy import event, visual, core, monitors
 import pylink
 from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
-collections.Callable = collections.abc.Callable
+
 
 
 SCREEN_DISTANCE_MM = 570
@@ -42,23 +45,23 @@ PRESENTATION_HEIGHT_PX = 720
 #######
 # LAB #
 #######
-DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
+#DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
 SCREEN_WIDTH_PX = 1920
 SCREEN_HEIGHT_PX = 1080
 SCREEN_WIDTH_MM = 600
 
-char_width_mm = 6
+#char_width_mm = 6
 
 
 ##########
 # LAPTOP #
 ##########
-#DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
+DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
 #SCREEN_WIDTH_PX = 1280
 #SCREEN_HEIGHT_PX = 720
 #SCREEN_WIDTH_MM = 312
 
-#char_width_mm = 3.5
+char_width_mm = 3
 
 # number of pixels to adjust display of things on screen
 # no idea why this works, just know that it does
@@ -76,7 +79,7 @@ FIXATION_TOLERANCE_PX = 18 # permissible distance from the fixation dot
 TIME_RESOLUTION_SECONDS = 0.002 # time to wait between gaze position polls
 FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/3
 
-TEST_MODE = False # if set to True, use mouse to simulate gaze position
+TEST_MODE = True # if set to True, use mouse to simulate gaze position
 
 INSTRUCTION_CALIBRATION = 'New calibration... Get comfortable...'
 INSTRUCTION_END = 'Experiment complete'
@@ -300,7 +303,7 @@ monitor = monitors.Monitor('monitor', width=SCREEN_WIDTH_PX, distance = SCREEN_D
 monitor.setSizePix = ((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX))
 win = visual.Window((SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX),
                     monitor=monitor, fullscr=True, winType='pyglet',
-                    units='pix', allowStencil=True)
+                    units='pix', allowStencil=True, waitBlanking=True)
 
 mouse = event.Mouse(visible=True, win=win)
 mouse.clickReset()
@@ -315,28 +318,28 @@ fixation_dot = visual.Circle(
 
 clock = core.Clock()
 
-#if not TEST_MODE:
+if not TEST_MODE:
     # Set up eye tracker connection
-tracker = pylink.EyeLink('100.1.1.1')
-tracker.openDataFile('exp.edf')
-tracker.sendCommand("add_file_preamble_text 'Experiment 1'")
-pylink.openGraphicsEx(EyeLinkCoreGraphicsPsychoPy(tracker, win))
-tracker.setOfflineMode()
-pylink.pumpDelay(100)
-tracker.sendCommand(f'screen_pixel_coords = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
-tracker.sendMessage(f'DISPLAY_COORDS = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
-tracker.sendCommand('sample_rate 1000')
-tracker.sendCommand('recording_parse_type = GAZE')
-tracker.sendCommand('select_parser_configuration 0')
-tracker.sendCommand('calibration_type = HV13') # 13-point calibration
-proportion_w = PRESENTATION_WIDTH_PX / SCREEN_WIDTH_PX
-proportion_h = PRESENTATION_HEIGHT_PX / SCREEN_HEIGHT_PX
-tracker.sendCommand(f'calibration_area_proportion = {proportion_w} {proportion_h}')
-tracker.sendCommand(f'validation_area_proportion = {proportion_w} {proportion_h}')
-tracker.sendCommand('file_event_filter = LEFT,RIGHT,FIXATION,SACCADE,BLINK,MESSAGE,BUTTON,INPUT')
-tracker.sendCommand('file_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
-tracker.sendCommand('link_event_filter = LEFT,RIGHT,FIXATION,FIXUPDATE,SACCADE,BLINK,BUTTON,INPUT')
-tracker.sendCommand('link_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
+    tracker = pylink.EyeLink('100.1.1.1')
+    tracker.openDataFile('exp.edf')
+    tracker.sendCommand("add_file_preamble_text 'Experiment 1'")
+    pylink.openGraphicsEx(EyeLinkCoreGraphicsPsychoPy(tracker, win))
+    tracker.setOfflineMode()
+    pylink.pumpDelay(100)
+    tracker.sendCommand(f'screen_pixel_coords = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
+    tracker.sendMessage(f'DISPLAY_COORDS = 0 0 {SCREEN_WIDTH_PX-1} {SCREEN_HEIGHT_PX-1}')
+    tracker.sendCommand('sample_rate 1000')
+    tracker.sendCommand('recording_parse_type = GAZE')
+    tracker.sendCommand('select_parser_configuration 0')
+    tracker.sendCommand('calibration_type = HV13') # 13-point calibration
+    proportion_w = PRESENTATION_WIDTH_PX / SCREEN_WIDTH_PX
+    proportion_h = PRESENTATION_HEIGHT_PX / SCREEN_HEIGHT_PX
+    tracker.sendCommand(f'calibration_area_proportion = {proportion_w} {proportion_h}')
+    tracker.sendCommand(f'validation_area_proportion = {proportion_w} {proportion_h}')
+    tracker.sendCommand('file_event_filter = LEFT,RIGHT,FIXATION,SACCADE,BLINK,MESSAGE,BUTTON,INPUT')
+    tracker.sendCommand('file_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
+    tracker.sendCommand('link_event_filter = LEFT,RIGHT,FIXATION,FIXUPDATE,SACCADE,BLINK,BUTTON,INPUT')
+    tracker.sendCommand('link_sample_data  = LEFT,RIGHT,GAZE,GAZERES,PUPIL,HREF,AREA,STATUS,INPUT')
 
 
 def transform_to_center_origin(x, y):
@@ -366,10 +369,11 @@ def get_gaze_position():
     if TEST_MODE:
         return mouse.getPos()
     gaze_sample = tracker.getNewestSample()
-    if gaze_sample.isRightSample():
-        x, y = gaze_sample.getRightEye().getGaze()
-    else:
-        x, y = gaze_sample.getLeftEye().getGaze()
+    if gaze_sample and gaze_sample.isValid:
+        if gaze_sample.isRightSample():
+            x, y = gaze_sample.getRightEye().getGaze()
+        else:
+            x, y = gaze_sample.getLeftEye().getGaze()
     return transform_to_center_origin(x, y)
 
 
@@ -515,8 +519,8 @@ def render_experimenter_screen(boundary=0):
     Render an outline of the screen on the host computer. In test mode,
     this is skipped.
     '''
-    #if TEST_MODE:
-    #    return
+    if TEST_MODE:
+        return
     tracker.clearScreen(color=0)
 
     tracker.drawLine(
@@ -586,6 +590,7 @@ def instructions(image=None, message=None, progression=None):
     Display an instructional image or message and await a press of the
     space bar to continue.
     '''
+    #fuck
     if not TEST_MODE:
         tracker.startRecording(1, 1, 1, 1)
     if image:
@@ -813,11 +818,13 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
         n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
     n_trials_until_calibration -= 1
 
-    #if not TEST_MODE:
-    render_experimenter_screen(boundary)
-    tracker.startRecording(1,1,1,1)
-    tracker.sendMessage('trial_type boundary_trial')
-    tracker.sendMessage(f'target {target}')
+    #win.recordFrameIntervals = True
+
+    if not TEST_MODE:
+        render_experimenter_screen(boundary)
+        tracker.startRecording(1,1,1,1)
+        tracker.sendMessage('trial_type boundary_trial')
+        tracker.sendMessage(f'target {target}')
 
     show_fixation_dot()
     prev_stim.draw()
@@ -826,10 +833,14 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
 
     targ_stim.draw()
     await_boundary_cross(boundary)
+    
+    #time = defaultClock.getTime()
     pre_flip = clock.getTime(applyZero=True) * 1000 # time in s transformed to ms
     win.flip()
     post_flip = clock.getTime(applyZero=True) * 1000 # time in s transformed to ms
+    #flip_time = flip - time
     flip_time = post_flip - pre_flip
+    #win.recordFrameIntervals = False
 
     if not TEST_MODE:
         tracker.sendMessage('trigger_timer')
@@ -851,12 +862,14 @@ practice_stim = import_txt('practice_stim.txt')
 practice_stim = [{'sentence':sentence} for sentence in practice_stim]
 
 # get participant ID
-parser = argparse.ArgumentParser()
-parser.add_argument('user_id', action='store', type=str, help='user ID')
-parser.add_argument('lst_number', action='store', type=str, help='stimuli list number')
-args = parser.parse_args()
-sbj_ID = args.user_id
-sbj_lst = args.lst_number
+#parser = argparse.ArgumentParser()
+#parser.add_argument('user_id', action='store', type=str, help='user ID')
+#parser.add_argument('lst_number', action='store', type=str, help='stimuli list number')
+#args = parser.parse_args()
+#sbj_ID = args.user_id
+#sbj_lst = args.lst_number
+sbj_ID = 24
+sbj_lst = '1'
 
 if sbj_lst == '1':
     file = 'version1.csv'
@@ -926,6 +939,7 @@ for x in range(4): # 4 blocks
                 fl = user_data_path/f'sbj_{sbj_ID}_fiptimes.txt'
                 with open(fl, 'w',encoding="utf-8") as file:
                     json.dump(flips, file, indent='\t')
+                win.saveFrameIntervals(fileName=None, clear=True)
                 abandon_trial()
                 core.quit()
             # get x position of boundary, from left of screen, in pixels:
@@ -949,6 +963,7 @@ for x in range(4): # 4 blocks
                 abandon_trial()
                 n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
             except InterruptTrialAndExit:
+                win.saveFrameIntervals(fileName=None, clear=True)
                 abandon_trial()
                 core.quit()
 
@@ -969,9 +984,15 @@ instructions(
 # save data
 user_data.append(int(time()))
 
+win.saveFrameIntervals(fileName=None, clear=True)
+
 fl = user_data_path/f'sbj_{sbj_ID}.json'
 with open(fl, 'w', encoding='utf-8') as file:
     json.dump(user_data, file, indent='\t')
+
+fl = user_data_path/f'sbj_{sbj_ID}_fiptimes.txt'
+with open(fl, 'w',encoding="utf-8") as file:
+    json.dump(flips, file, indent='\t')
 
 save_tracker_recording()
 
