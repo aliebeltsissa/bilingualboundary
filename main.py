@@ -22,6 +22,7 @@ IMPORTANT: Change participant ID & number directly in the script below
 import collections.abc
 collections.Callable = collections.abc.Callable
 import psychopy
+#psychopy.useVersion('2024.2.3')
 from os import system
 from time import time
 import random
@@ -35,7 +36,7 @@ from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
 
 
 
-SCREEN_DISTANCE_MM = 570
+SCREEN_DISTANCE_MM = 1010
 
 # area of the screen that is actually used
 PRESENTATION_WIDTH_PX = 1280
@@ -44,23 +45,23 @@ PRESENTATION_HEIGHT_PX = 720
 #######
 # LAB #
 #######
-DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
-SCREEN_WIDTH_PX = 1920
-SCREEN_HEIGHT_PX = 1080
-SCREEN_WIDTH_MM = 600
+#DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
+#SCREEN_WIDTH_PX = 1920
+#SCREEN_HEIGHT_PX = 1080
+#SCREEN_WIDTH_MM = 600
 
-char_width_mm = 6
+#char_width_mm = 6
 
 
 ##########
 # LAPTOP #
 ##########
-#DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
-#SCREEN_WIDTH_PX = 1280
-#SCREEN_HEIGHT_PX = 720
-#SCREEN_WIDTH_MM = 312
+DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
+SCREEN_WIDTH_PX = 1280
+SCREEN_HEIGHT_PX = 720
+SCREEN_WIDTH_MM = 312
 
-#char_width_mm = 3
+char_width_mm = 3
 
 # number of pixels to adjust display of things on screen
 # no idea why this works, just know that it does
@@ -85,7 +86,6 @@ INSTRUCTION_END = 'Experiment complete'
 
 # EXPERIMENTAL SETTINGS
 task_id = 'boundary_exp'
-calibration_freq = 16 # after how many trials the calibration occurs
 px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
 char_width = int(round(char_width_mm * px_per_mm))
 char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO # font size 17 on laptop, 23 in lab
@@ -98,7 +98,6 @@ bottom_of_screen = (0,bottom_of_screen_y)
 
 
 n_completed_trials = 0
-n_trials_until_calibration = 0
 
 class InterruptTrialAndRecalibrate(Exception):
     '''
@@ -386,7 +385,7 @@ def get_gaze_position():
     return transform_to_center_origin(x, y)
 
 
-def perform_calibration(n_trials_until_calibration):
+def perform_calibration():
     '''
     Run through the eye tracker calibration sequence. In test mode, this
     is skipped.
@@ -401,8 +400,6 @@ def perform_calibration(n_trials_until_calibration):
 
     if not TEST_MODE:
         tracker.doTrackerSetup()
-    n_trials_until_calibration = calibration_freq
-    return n_trials_until_calibration
 
 
 def await_gaze_selection(buttons):
@@ -581,7 +578,7 @@ def render_experimenter_screen(boundary=0):
     #)
 
     tracker.drawText(
-        f'"Trial {n_completed_trials + 1} ({n_trials_until_calibration})"'
+        f'"Trial {n_completed_trials + 1}"'
     )
 
 
@@ -650,7 +647,6 @@ def instructions(image=None, message=None, progression=None):
     time = clock.getTime(applyZero=True)
     print(f'{time}: instructions')
 
-    n_trials_until_calibration = 0
     if progression == 'button':
         mouse.visible = True
         selected_button = await_gaze_selection([next_button])
@@ -662,7 +658,6 @@ def instructions(image=None, message=None, progression=None):
     if not TEST_MODE:
         tracker.stopRecording()
     mouse.setVisible(TEST_MODE)
-    return n_trials_until_calibration
 
 
 def textbox_input(prompt=''):
@@ -792,17 +787,13 @@ def comprehension_check(sentence,expected):
     return selected_button, correct
 
 
-def practice_trial(trial_stimuli,n_trials_until_calibration):
+def practice_trial(trial_stimuli):
     '''
     Practice trial for the boundary experiment.
     '''
     if not TEST_MODE:
         tracker.startRecording(1, 1, 1, 1)
     end = (stimstart_center) + len(trial_stimuli) * char_width
-
-    if n_trials_until_calibration == 0:
-        n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
-    n_trials_until_calibration -= 1
 
     if trial_stimuli == 'Fifteen men and women were at the market that day.':
         attention_sentence = trial_stimuli
@@ -814,7 +805,7 @@ def practice_trial(trial_stimuli,n_trials_until_calibration):
         await_fixation_on_fixation_dot()
     except InterruptTrialAndContinue:
         abandon_trial()
-        return attention_sentence, n_trials_until_calibration
+        return attention_sentence
     except InterruptTrialAndExit:
         abandon_trial()
         save_output()
@@ -838,7 +829,7 @@ def practice_trial(trial_stimuli,n_trials_until_calibration):
         await_boundary_cross(end)
     except InterruptTrialAndContinue:
         abandon_trial()
-        return attention_sentence, n_trials_until_calibration
+        return attention_sentence
     core.wait(0.5)
 
     win.flip()
@@ -847,10 +838,10 @@ def practice_trial(trial_stimuli,n_trials_until_calibration):
         tracker.stopRecording()
     core.wait(2)
     
-    return attention_sentence, n_trials_until_calibration
+    return attention_sentence
 
 
-def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials):
+def boundary_trial(trial_stimuli, n_completed_trials):
     '''
     Trial where the participant's gaze has to cross a boundary to continue.
     '''
@@ -865,12 +856,6 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     # -6 added since the boundary was otherwise
     # in the space instead of immediately at the end of the final word
     end = (stimstart_center) + len(sentence) * char_width -6
-
-    # perform calibration
-    # (not necessary unless drift is significant, so check and launch manually)
-    #if n_trials_until_calibration == 0:
-    #    n_trials_until_calibration = perform_calibration(n_trials_until_calibration)
-    #n_trials_until_calibration -= 1
 
     if not TEST_MODE:
         render_experimenter_screen(boundary)
@@ -902,7 +887,7 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
         await_boundary_cross(end)
     except InterruptTrialAndContinue:
         abandon_trial()
-        return n_completed_trials, n_trials_until_calibration
+        return n_completed_trials
     core.wait(0.5)
     win.flip()
 
@@ -912,7 +897,7 @@ def boundary_trial(trial_stimuli, n_trials_until_calibration, n_completed_trials
     core.wait(2)
 
     n_completed_trials += 1
-    return n_completed_trials, n_trials_until_calibration
+    return n_completed_trials
 
 
 def save_output():
@@ -937,8 +922,8 @@ practice_stim = [{'sentence':sentence} for sentence in practice_stim]
 #sbj_ID = args.user_id
 #sbj_lst = args.lst_number
 
-sbj_ID = 99
-sbj_lst = '1'
+sbj_ID = 2
+sbj_lst = '2'
 
 if sbj_lst == '1':
     file = 'version1.csv'
@@ -966,20 +951,20 @@ if not user_data_path.exists():
     user_data_path.mkdir()
 
 # welcome
-n_trials_until_calibration = instructions(image='welcome_instructions.png')
+instructions(image='welcome_instructions.png')
 
 # calibration
-n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
+perform_calibration()
 
 # practice trials
+attention_sentence = '0'
 for item in practice_stim:
     trial_stimuli = item
     try:
-        attention_sentence, n_trials_until_calibration = practice_trial(trial_stimuli['sentence'],
-       n_trials_until_calibration)
+        attention_sentence = practice_trial(trial_stimuli['sentence'])
     except InterruptTrialAndRecalibrate:
         abandon_trial()
-        n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
+        perform_calibration()
     except InterruptTrialAndExit:
         abandon_trial()
         save_output()
@@ -993,7 +978,7 @@ for item in practice_stim:
 
 
 # main experiment
-n_trials_until_calibration = instructions(
+instructions(
  message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",
  progression='button'
 )
@@ -1002,18 +987,17 @@ n_trials_until_calibration = instructions(
 for x in range(4): # 4 blocks
     block_stim = blocked_stimuli[x] # extract stimuli for one block
     if x>0:
-        n_trials_until_calibration = perform_calibration(0)
+        perform_calibration(0)
         # calibrate before the start of each block,
         # except the first (when there's anyway a calibration)
 
     for trial in block_stim: # for each trial in that block
         if trial['type'] == 'trial': # if experimental trial, do boundary trial
             try:
-                n_completed_trials, n_trials_until_calibration = boundary_trial(
-                    trial, n_trials_until_calibration, n_completed_trials)
+                n_completed_trials = boundary_trial(trial, n_completed_trials)
             except InterruptTrialAndRecalibrate:
                 abandon_trial()
-                n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
+                perform_calibration()
             except InterruptTrialAndExit:
                 abandon_trial()
                 save_output()
@@ -1029,8 +1013,7 @@ for x in range(4): # 4 blocks
         elif trial['type'] == 'filler': # if filler trial, do filler trial, then comprehension check
             try:
                 # filler trial:
-                sentence, n_trials_until_calibration = practice_trial(
-                    trial['filler'], n_trials_until_calibration)
+                sentence = practice_trial(trial['filler'])
                 # comprehension check:
                 response,correct = comprehension_check(trial['question'],trial['answer'])
                 # add response to data:
@@ -1039,7 +1022,7 @@ for x in range(4): # 4 blocks
                 )
             except InterruptTrialAndRecalibrate:
                 abandon_trial()
-                n_trials_until_calibration = perform_calibration(n_trials_until_calibration=0)
+                perform_calibration()
             except InterruptTrialAndExit:
                 abandon_trial()
                 save_output()
@@ -1049,7 +1032,7 @@ for x in range(4): # 4 blocks
 
     # after each block, display inter-block break:
     if x+1 < 4:
-        n_trials_until_calibration = instructions(
+        qinstructions(
             message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue."
         )
 
