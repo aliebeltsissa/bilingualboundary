@@ -35,8 +35,13 @@ import pylink
 from EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
 
 
+sbj_ID = 4
+sbj_lst = '4'
 
-SCREEN_DISTANCE_MM = 1010
+TEST_MODE = False # if set to True, use mouse to simulate gaze position
+
+
+SCREEN_DISTANCE_MM = 570
 
 # area of the screen that is actually used
 PRESENTATION_WIDTH_PX = 1280
@@ -45,23 +50,23 @@ PRESENTATION_HEIGHT_PX = 720
 #######
 # LAB #
 #######
-#DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
-#SCREEN_WIDTH_PX = 1920
-#SCREEN_HEIGHT_PX = 1080
-#SCREEN_WIDTH_MM = 600
+DATA_DIR = Path('D:/ALiebelt/bilingualboundary')
+SCREEN_WIDTH_PX = 1920
+SCREEN_HEIGHT_PX = 1080
+SCREEN_WIDTH_MM = 600
 
-#char_width_mm = 6
+char_width_mm = 5
 
 
 ##########
 # LAPTOP #
 ##########
-DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
-SCREEN_WIDTH_PX = 1280
-SCREEN_HEIGHT_PX = 720
-SCREEN_WIDTH_MM = 312
+#DATA_DIR = Path('C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary')
+#SCREEN_WIDTH_PX = 1280
+#SCREEN_HEIGHT_PX = 720
+#SCREEN_WIDTH_MM = 312
 
-char_width_mm = 3
+#char_width_mm = 3
 
 # number of pixels to adjust display of things on screen
 # no idea why this works, just know that it does
@@ -79,22 +84,22 @@ FIXATION_TOLERANCE_PX = 32 # permissible distance from the fixation dot
 TIME_RESOLUTION_SECONDS = 0.002 # time to wait between gaze position polls
 FONT_WIDTH_TO_HEIGHT_RATIO = 1.66666667 # in Courier New, this ratio is 1 : 1 2/3
 
-TEST_MODE = True # if set to True, use mouse to simulate gaze position
-
 INSTRUCTION_CALIBRATION = 'New calibration... Get comfortable...'
 INSTRUCTION_END = 'Experiment complete'
 
 # EXPERIMENTAL SETTINGS
 task_id = 'boundary_exp'
-px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM
-char_width = int(round(char_width_mm * px_per_mm))
-char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO # font size 17 on laptop, 23 in lab
+px_per_mm = SCREEN_WIDTH_PX / SCREEN_WIDTH_MM # 3.2
+char_width = int(round(char_width_mm * px_per_mm)) # 16 px per character
+char_height = char_width * FONT_WIDTH_TO_HEIGHT_RATIO # 26.66666672 px
+# 20 pt font size
 top_of_screen_y = PRESENTATION_HEIGHT_PX/2
 top_of_screen = (0,top_of_screen_y)
 bottom_of_screen_y = -PRESENTATION_HEIGHT_PX/2
 bottom_of_screen = (0,bottom_of_screen_y)
 # 1 deg of visual angle = 32 px
-# 1.68 characters per deg of visual angle
+# 1.6 characters per deg of visual angle
+# max sentence len = 77 characters = 1232 px = 38.5 deg
 
 
 n_completed_trials = 0
@@ -341,7 +346,7 @@ if not TEST_MODE:
     tracker.sendCommand('select_parser_configuration 0')
     tracker.sendCommand('calibration_type = HV13') # 13-point calibration
     proportion_w = PRESENTATION_WIDTH_PX / SCREEN_WIDTH_PX
-    proportion_h = PRESENTATION_HEIGHT_PX / SCREEN_HEIGHT_PX
+    proportion_h = PRESENTATION_HEIGHT_PX / SCREEN_HEIGHT_PX / 2 # want calib/valid targets closer to the centre line
     tracker.sendCommand(f'calibration_area_proportion = {proportion_w} {proportion_h}')
     tracker.sendCommand(f'validation_area_proportion = {proportion_w} {proportion_h}')
     tracker.sendCommand('file_event_filter = LEFT,RIGHT,FIXATION,SACCADE,BLINK,MESSAGE,BUTTON,INPUT')
@@ -551,24 +556,27 @@ def render_experimenter_screen(boundary=0):
         return
     tracker.clearScreen(color=0)
 
+    # centre horizontal line
     tracker.drawLine(
         (stimstart_left - magic_number, SCREEN_HEIGHT_PX // 2),
         (SCREEN_WIDTH_PX, SCREEN_HEIGHT_PX // 2),
         color=1
     )
 
+    # vertical line at fixation dot
     tracker.drawLine(
         (stimstart_left - magic_number, SCREEN_HEIGHT_PX),
-        (stimstart_left - magic_number, -SCREEN_HEIGHT_PX),
+        (stimstart_left - magic_number, 0),
         color=1
     )
 
     # why is this correct?
-    tracker.drawLine(
-        (boundary + SCREEN_WIDTH_PX // 2, SCREEN_HEIGHT_PX),
-        (boundary + SCREEN_WIDTH_PX // 2, -SCREEN_HEIGHT_PX),
-        color=2
-    )
+    if boundary > 0:
+        tracker.drawLine(
+            (boundary + SCREEN_WIDTH_PX // 2, SCREEN_HEIGHT_PX),
+            (boundary + SCREEN_WIDTH_PX // 2, -SCREEN_HEIGHT_PX),
+            color=2
+        )
 
     # to try:
     #tracker.drawLine(
@@ -638,7 +646,7 @@ def instructions(image=None, message=None, progression=None):
         next_button = visual.ImageStim(win,
             image=Path('./images/buttons/next.png',),
             size=BUTTON_SIZE_PX,
-            pos=bottom_of_screen,
+            pos=(0,bottom_of_screen_y + 200),
             name='next_button'
         )
         next_button.draw()
@@ -655,9 +663,9 @@ def instructions(image=None, message=None, progression=None):
     else:
         event.waitKeys(keyList=['space'])
         win.flip()
+    mouse.setVisible(TEST_MODE)
     if not TEST_MODE:
         tracker.stopRecording()
-    mouse.setVisible(TEST_MODE)
 
 
 def textbox_input(prompt=''):
@@ -729,26 +737,28 @@ def comprehension_check(sentence,expected):
         color='black',
         height=char_height,
         font='Courier New',
-        pos=(0,top_of_screen_y - 100)
+        pos=(0,top_of_screen_y - 200)
     )
     comprehension = visual.TextStim(win,
         text=sentence,
         color='darkblue',
         height=char_height,
-        font='Courier New'
+        font='Courier New',
+        wrapWidth=1000,
     )
     true = visual.ImageStim(win,
         image=Path('./images/buttons/true.png',),
         size=BUTTON_SIZE_PX,
-        pos=(-200,bottom_of_screen_y + 200),
+        pos=(-200,bottom_of_screen_y + 300),
         name='true'
     )
     false = visual.ImageStim(win,
         image=Path('./images/buttons/false.png',),
         size=BUTTON_SIZE_PX,
-        pos=(200,bottom_of_screen_y + 200),
+        pos=(200,bottom_of_screen_y + 300),
         name='false'
     )
+
     instructions.draw()
     comprehension.draw()
     true.draw()
@@ -791,9 +801,7 @@ def practice_trial(trial_stimuli):
     '''
     Practice trial for the boundary experiment.
     '''
-    if not TEST_MODE:
-        tracker.startRecording(1, 1, 1, 1)
-    end = (stimstart_center) + len(trial_stimuli) * char_width
+    end = (stimstart_center) + (len(trial_stimuli) * char_width)
 
     if trial_stimuli == 'Fifteen men and women were at the market that day.':
         attention_sentence = trial_stimuli
@@ -801,8 +809,25 @@ def practice_trial(trial_stimuli):
         attention_sentence = '0' # else don't do an attention check
 
     show_fixation_dot()
+
+    if not TEST_MODE:
+        tracker.startRecording(1, 1, 1, 1)
+        render_experimenter_screen()
+        tracker.startRecording(1,1,1,1)
+        tracker.sendMessage(f'practice trial')
+
     try:
         await_fixation_on_fixation_dot()
+    except InterruptTrialAndRecalibrate:
+        if not TEST_MODE:
+            tracker.stopRecording()
+        win.flip()
+        win.flip()
+        perform_calibration()
+
+        show_fixation_dot()
+        if not TEST_MODE:
+                tracker.startRecording(1, 1, 1, 1)
     except InterruptTrialAndContinue:
         abandon_trial()
         return attention_sentence
@@ -830,7 +855,7 @@ def practice_trial(trial_stimuli):
     except InterruptTrialAndContinue:
         abandon_trial()
         return attention_sentence
-    core.wait(0.5)
+    core.wait(0.25)
 
     win.flip()
 
@@ -851,11 +876,17 @@ def boundary_trial(trial_stimuli, n_completed_trials):
     boundary = trial_stimuli['boundary_shift'] -4
     pre_target = trial_stimuli['pre_target']
     target = trial_stimuli['target']
+    target_len = (len(target) +1) * char_width
+    after_target = boundary + target_len
     post_target = trial_stimuli['post_target']
+    sentence_len = trial_stimuli['sentence_len']
     sentence = pre_target + target + post_target
     # -6 added since the boundary was otherwise
     # in the space instead of immediately at the end of the final word
-    end = (stimstart_center) + len(sentence) * char_width -6
+    end = (stimstart_center) + (sentence_len * char_width)
+
+    show_fixation_dot()
+    prev_stim.draw()
 
     if not TEST_MODE:
         render_experimenter_screen(boundary)
@@ -863,32 +894,58 @@ def boundary_trial(trial_stimuli, n_completed_trials):
         tracker.sendMessage(f'trial {n_completed_trials+1} start')
         tracker.sendMessage(f'target {target}')
 
-    show_fixation_dot()
-    prev_stim.draw()
     try:
         await_fixation_on_fixation_dot()
+    except InterruptTrialAndRecalibrate:
+        if not TEST_MODE:
+            tracker.sendMessage(f'trial {n_completed_trials+1} interrupted for calibration')
+            tracker.stopRecording()
+        win.flip()
+        win.flip()
+        perform_calibration()
+
+        show_fixation_dot()
+        prev_stim.draw()
+        if not TEST_MODE:
+            render_experimenter_screen(boundary)
+            tracker.startRecording(1,1,1,1)
+            tracker.sendMessage(f'trial {n_completed_trials+1} restart')
+            tracker.sendMessage(f'target {target}')
+        try:
+            await_fixation_on_fixation_dot()
+        except InterruptTrialAndContinue:
+            if not TEST_MODE:
+                tracker.sendMessage(f'trial {n_completed_trials+1} fix aborted')
     except InterruptTrialAndContinue:
         win.flip()
     except InterruptTrialAndExit:
         abandon_trial()
         save_output()
         core.quit()
+
     win.flip()
     time = clock.getTime(applyZero=True)
-    print(f'{time}: text')
+    print(f'{time}: boundary trial')
 
     targ_stim.draw()
     await_boundary_cross(boundary)
     win.flip()
+    print('on_target')
     if not TEST_MODE:
-        tracker.sendMessage('boundary_crossed')
-
+        tracker.sendMessage('on_target')
+        
+    await_boundary_cross(after_target)
+    if not TEST_MODE:
+        tracker.sendMessage('off_target')
+    print('off_target')
+    
     try:
         await_boundary_cross(end)
     except InterruptTrialAndContinue:
         abandon_trial()
         return n_completed_trials
-    core.wait(0.5)
+    core.wait(0.25)
+    print('end')
     win.flip()
 
     if not TEST_MODE:
@@ -921,9 +978,6 @@ practice_stim = [{'sentence':sentence} for sentence in practice_stim]
 #args = parser.parse_args()
 #sbj_ID = args.user_id
 #sbj_lst = args.lst_number
-
-sbj_ID = 2
-sbj_lst = '2'
 
 if sbj_lst == '1':
     file = 'version1.csv'
@@ -979,24 +1033,25 @@ for item in practice_stim:
 
 # main experiment
 instructions(
- message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",
- progression='button'
+    message="Congratulations! Now onto the main experiment. You'll now be given 4 blocks of sentences to read. Look at 'Next' when ready to start block 1.",progression='button'
 )
-
 
 for x in range(4): # 4 blocks
     block_stim = blocked_stimuli[x] # extract stimuli for one block
     if x>0:
-        perform_calibration(0)
+        perform_calibration()
         # calibrate before the start of each block,
         # except the first (when there's anyway a calibration)
 
+    n_trial_in_block = 0
     for trial in block_stim: # for each trial in that block
+        print(f'Trial {n_trial_in_block+1}/42')
         if trial['type'] == 'trial': # if experimental trial, do boundary trial
             try:
                 n_completed_trials = boundary_trial(trial, n_completed_trials)
             except InterruptTrialAndRecalibrate:
                 abandon_trial()
+                n_completed_trials += 1
                 perform_calibration()
             except InterruptTrialAndExit:
                 abandon_trial()
@@ -1029,10 +1084,11 @@ for x in range(4): # 4 blocks
                 core.quit()
             except InterruptTrialAndContinue:
                 abandon_trial()
+        n_trial_in_block += 1
 
     # after each block, display inter-block break:
     if x+1 < 4:
-        qinstructions(
+        instructions(
             message=f"You've finished reading block {x+1} out of 4! PLease take a short break, and press the spacebar when you're ready to continue."
         )
 
