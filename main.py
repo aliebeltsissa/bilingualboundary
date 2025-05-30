@@ -1095,7 +1095,7 @@ for x in range(4): # 4 blocks
 
 # debrief
 instructions(
-    message="You've finished the experiment! This experiment aimed at testing how quickly people process key words in the sentences, based on what word we put in its place before your eyes moved to that location. These preview words had different links to the target word (they were the real word, or the Italian translation, or just had letters in common, or nothing in common). The experiment aims at understanding which of these different preview types helped you process the target word the most. Thanks for your participation!"
+    message="You've finished the experiment! Thank you very much."
 )
 
 save_output()
