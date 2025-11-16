@@ -16,17 +16,17 @@ setwd("C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary/data");
 all_ET <- read.csv("all_ET.csv",header=T,sep=",");
 all_scores <- read.csv("all_scores.csv",header=T,sep=",");
 
-all_ET <- subset(all_ET, select = -c(X,pre_target,post_target,type,TextBlock,adjusted_seq,fixations,rec_id,msgs));
+all_ET <- subset(all_ET, select = -c(X,post_target,type,TextBlock,adjusted_seq,fixations,rec_id,msgs,noshorts_seq));
 
 all_ET$morph_type <- factor(all_ET$morph_type, levels=c("simple", "complex"));
 all_ET$lst_type <- factor(all_ET$lst_type);
 all_ET$target <- factor(all_ET$target);
 all_ET$preview <- factor(all_ET$preview);
 all_ET$trial_type <- factor(all_ET$trial_type, levels=c("identical", "cognate", "legal_nonword", "illegal_nonword"));
+all_ET$trial_issue <- factor(all_ET$trial_issue);
 summary(all_ET);
 
 all_scores <- subset(all_scores, select = -c(X));
-
 all_scores$sbj_ID <- as.factor(all_scores$sbj_ID);
 all_scores$gender <- as.factor(all_scores$gender);
 summary(all_scores);

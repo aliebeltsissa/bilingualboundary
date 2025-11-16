@@ -521,7 +521,7 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
 
 
 
-participant_ids = [3,4,8,9,10,11,12,13,14,15,16,19,21,22,24,25,26,29,31,32,33,34,35,36,38,39,40,41,42,43,45,46,47,48,49,51,52,53,54,55,58,59]
+participant_ids = [3,4,8,9,10,11,12,13,14,15,16,19,21,22,24,25,26,29,31,32,33,34,35,36,38,39,40,41,42,43,45,46,47,48,49,51,52,53,54,55,58,59,60]
 
 # by-participant pre-processing
 participant_preprocessing(id=3,lextale_score=86.25,morph_score=95,changes=15,gender='M',age=22)
@@ -566,6 +566,7 @@ participant_preprocessing(id=54,lextale_score=80,morph_score=100,changes=6)
 participant_preprocessing(id=55,lextale_score=83.75,morph_score=95,changes=17)
 participant_preprocessing(id=58,lextale_score=81.25,morph_score=70,changes=3)
 participant_preprocessing(id=59,lextale_score=78.75,morph_score=90,changes=5)
+participant_preprocessing(id=60,lextale_score=96.25,morph_score=85,changes=7.5)
 
 # combine all participant datafiles into large dataframe
 all_ET = pd.DataFrame()
