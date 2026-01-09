@@ -1,3 +1,5 @@
+# Works after processing EDF file with Eyelink DataViewer's Visual EDF2ASC version 4.4.1, NOT version 5.1.1!!
+
 import eyekit
 import json
 import statistics
@@ -12,8 +14,8 @@ px_per_character = 16
 font_height = 26.66666672
 screen_height = 1080
 
-data_path = 'C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary/data'
-stimuli_path = 'C:/Users/annal/OneDrive/Documents/GitHub/bilingualboundary/stimuli'
+data_path = 'C:/Users/annal/Documents/GitHub/bilingualboundary/data'
+stimuli_path = 'C:/Users/annal/Documents/GitHub/bilingualboundary/stimuli'
 
 
 def split(sequence, sep):
@@ -51,9 +53,9 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
 
     # read created txt file
     with open(f"{sbj_data_path}/{id}.txt", "r", encoding='utf-8') as file_txt:
-            file_txt = file_txt.read()
-            file_txt = file_txt.split("\n") # split text file into list
-            file_txt = file_txt[:-1] # remove last \n from text file
+        file_txt = file_txt.read()
+        file_txt = file_txt.split("\n") # split text file into list
+        file_txt = file_txt[:-1] # remove last \n from text file
 
     # create list of just the messages sent to the tracker
     msgs = []
@@ -285,7 +287,7 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
     if excluded_fixs != None:
         for trial in excluded_fixs:
             trial_n = trial[0]
-            fix_n = trial[1] -1
+            fix_n = trial[1]
             
             for trial_rec in boundary_recordings:
                 trial_id = int("".join([ele for ele in trial_rec['msgs'][0] if ele.isdigit()]))
@@ -296,7 +298,7 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
                             if count == fix_n:
                                 fixation.discard()
                                 trial_rec['adjusted_seq'].purge()
-                                print(f'Discarded trial {trial_id}, fixation {count+1}')
+                                print(f'Discarded trial {trial_id}, fixation {fix_n}')
                             count += 1
 
     # exclude problematic trials
@@ -308,7 +310,7 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
     #                boundary_recordings.remove(trial_rec)
 
     # get participant bad trials log
-    badtrials = pd.read_excel("C:/Users/annal/OneDrive/Documents/Me/SISSA/BBET/BBET_analysis/BBET_preprocessing.xlsx")
+    badtrials = pd.read_excel("C:/Users/annal/Documents/Me/SISSA/BBET/BBET_analysis/BBET_preprocessing.xlsx")
     sbj_badtrials = badtrials[badtrials['sbj_ID']==id]
 
     # make into a dict
@@ -332,6 +334,22 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
                 fixation.discard()
         trial_rec['noshorts_seq'].purge()
 
+    # create Fixation Sequences without long fixations (>1000ms)
+    for trial_rec in boundary_recordings:
+        trial_rec['nolongs_seq'] = trial_rec['adjusted_seq'].copy()
+        for fixation in trial_rec['nolongs_seq']:
+            if fixation.duration > 1000:
+                fixation.discard()
+        trial_rec['nolongs_seq'].purge()
+
+    # create Fixation Sequences without short or long fixations ([80;1000]ms)
+    for trial_rec in boundary_recordings:
+        trial_rec['cleaned_seq'] = trial_rec['adjusted_seq'].copy()
+        for fixation in trial_rec['cleaned_seq']:
+            if fixation.duration < 80 or fixation.duration > 1000:
+                fixation.discard()
+        trial_rec['cleaned_seq'].purge()
+
     # add gaze metrics
     GDs_all = []
     FFDs_all = []
@@ -342,6 +360,16 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
     FFDs_noshortfixs = []
     GPDs_noshortfixs = []
     FoMs_noshortfixs = []
+
+    GDs_nolongfixs = []
+    FFDs_nolongfixs = []
+    GPDs_nolongfixs = []
+    FoMs_nolongfixs = []
+
+    GDs_cleanedfixs = []
+    FFDs_cleanedfixs = []
+    GPDs_cleanedfixs = []
+    FoMs_cleanedfixs = []
     for trial_rec in boundary_recordings:
         # count how many target fixs in this trial
         #count = 0
@@ -397,6 +425,48 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
                 FoM_noshortfixs = 'n/a'
             trial_rec['FoM_noshortfixs'] = FoM_noshortfixs
             FoMs_noshortfixs.append(FoM_noshortfixs)
+
+            # no long fixations
+            GD_nolongfixs = eyekit.measure.gaze_duration(trial_rec['TextBlock']['target'], trial_rec['nolongs_seq'])
+            trial_rec['GD_nolongfixs'] = GD_nolongfixs
+            GDs_nolongfixs.append(GD_nolongfixs)
+
+            FFD_nolongfixs = eyekit.measure.initial_fixation_duration(trial_rec['TextBlock']['target'], trial_rec['nolongs_seq'])
+            trial_rec['FFD_nolongfixs'] = FFD_nolongfixs
+            FFDs_nolongfixs.append(FFD_nolongfixs)
+            
+            GPD_nolongfixs = eyekit.measure.go_past_duration(trial_rec['TextBlock']['target'], trial_rec['nolongs_seq'])
+            trial_rec['GPD_nolongfixs'] = GPD_nolongfixs
+            GPDs_nolongfixs.append(GPD_nolongfixs)
+
+            if FFD_nolongfixs != GD_nolongfixs:
+                FoM_nolongfixs = FFD_nolongfixs
+                trial_rec['FoM_nolongfixs'] = FoM_nolongfixs
+            else:
+                FoM_nolongfixs = 'n/a'
+            trial_rec['FoM_nolongfixs'] = FoM_nolongfixs
+            FoMs_nolongfixs.append(FoM_nolongfixs)
+
+            # cleaned fixations
+            GD_cleanedfixs = eyekit.measure.gaze_duration(trial_rec['TextBlock']['target'], trial_rec['cleaned_seq'])
+            trial_rec['GD_cleanedfixs'] = GD_cleanedfixs
+            GDs_cleanedfixs.append(GD_cleanedfixs)
+
+            FFD_cleanedfixs = eyekit.measure.initial_fixation_duration(trial_rec['TextBlock']['target'], trial_rec['cleaned_seq'])
+            trial_rec['FFD_cleanedfixs'] = FFD_cleanedfixs
+            FFDs_cleanedfixs.append(FFD_cleanedfixs)
+            
+            GPD_cleanedfixs = eyekit.measure.go_past_duration(trial_rec['TextBlock']['target'], trial_rec['cleaned_seq'])
+            trial_rec['GPD_cleanedfixs'] = GPD_cleanedfixs
+            GPDs_cleanedfixs.append(GPD_cleanedfixs)
+
+            if FFD_cleanedfixs != GD_cleanedfixs:
+                FoM_cleanedfixs = FFD_cleanedfixs
+                trial_rec['FoM_cleanedfixs'] = FoM_cleanedfixs
+            else:
+                FoM_cleanedfixs = 'n/a'
+            trial_rec['FoM_cleanedfixs'] = FoM_cleanedfixs
+            FoMs_cleanedfixs.append(FoM_cleanedfixs)
 
     FoMs_noNAs = [x for x in FoMs_all if type(x) == int]
     
@@ -521,25 +591,25 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
 
 
 
-participant_ids = [3,4,8,9,10,11,12,13,14,15,16,19,21,22,24,25,26,29,31,32,33,34,35,36,38,39,40,41,42,43,45,46,47,48,49,51,52,53,54,55,58,59]
+participant_ids = [3,4,8,9,10,11,12,13,14,15,16,19,21,22,24,25,26,29,31,32,33,34,35,36,38,39,40,41,42,43,45,46,47,48,49,51,52,53,54,55,58,59,60,63,64,65,66,67,68,69]
 
 # by-participant pre-processing
 participant_preprocessing(id=3,lextale_score=86.25,morph_score=95,changes=15,gender='M',age=22)
-participant_preprocessing(id=4,lextale_score=95.5,morph_score=100,changes=7.5,excluded_fixs=[[111,2]],gender='M',age=24)
+participant_preprocessing(id=4,lextale_score=95.5,morph_score=100,changes=7.5,excluded_fixs=[[111,1]],gender='M',age=24)
 participant_preprocessing(id=8,lextale_score=80,morph_score=75,changes=5,gender='F',age=25)
 participant_preprocessing(id=9,lextale_score=75,morph_score=75,changes=15,gender='M',age=26)
 participant_preprocessing(id=10,lextale_score=85,morph_score=95,changes=2,gender='F',age=23)
-participant_preprocessing(id=11,lextale_score=92.5,morph_score=90,changes=10)
+participant_preprocessing(id=11,lextale_score=92.5,morph_score=90,changes=10,gender='M',age=24)
 participant_preprocessing(id=12,lextale_score=92.5,morph_score=95,changes=35,gender='M',age=26)
 participant_preprocessing(id=13,lextale_score=86.25,morph_score=90,changes=30,gender='M',age=20)
-participant_preprocessing(id=14,lextale_score=87.5,morph_score=85,changes=30,excluded_fixs=[[68,2]],gender='M',age=25)
+participant_preprocessing(id=14,lextale_score=87.5,morph_score=85,changes=30,excluded_fixs=[[68,1]],gender='M',age=25)
 participant_preprocessing(id=15,lextale_score=77.5,morph_score=95,changes=17.5,gender='F',age=21)
 participant_preprocessing(id=16,lextale_score=91.25,morph_score=80,changes=10,gender='F',age=25)
 participant_preprocessing(id=19,lextale_score=85,morph_score=95,changes=5,gender='F',age=25)
 participant_preprocessing(id=21,lextale_score=82.5,morph_score=85,changes=5,gender='F',age=20)
 participant_preprocessing(id=22,lextale_score=82.5,morph_score=95,changes=22.5,gender='F',age=22)
 participant_preprocessing(id=24,lextale_score=75,morph_score=85,changes=17,gender='M',age=32)
-participant_preprocessing(id=25,lextale_score=78.75,morph_score=95,changes=20)
+participant_preprocessing(id=25,lextale_score=78.75,morph_score=95,changes=20,gender='M',age=28)
 participant_preprocessing(id=26,lextale_score=80,morph_score=85,changes=20,gender='F',age=19)
 participant_preprocessing(id=29,lextale_score=75,morph_score=75,changes=5,gender='M',age=25)
 participant_preprocessing(id=31,lextale_score=88.75,morph_score=85,changes=20,gender='F',age=24)
@@ -552,20 +622,28 @@ participant_preprocessing(id=38,lextale_score=78.75,morph_score=95,changes=22.5,
 participant_preprocessing(id=39,lextale_score=90,morph_score=95,changes=30,gender='F',age=20)
 participant_preprocessing(id=40,lextale_score=90,morph_score=95,changes=0,gender='F',age=23)
 participant_preprocessing(id=41,lextale_score=80,morph_score=85,changes=3,gender='F',age=23)
-participant_preprocessing(id=42,lextale_score=98.75,morph_score=100,changes=30,excluded_fixs=[[9,2]])
-participant_preprocessing(id=43,lextale_score=86.25,morph_score=95,changes=3)
-participant_preprocessing(id=45,lextale_score=93.75,morph_score=100,changes=40)
-participant_preprocessing(id=46,lextale_score=81.25,morph_score=75,changes=30,excluded_fixs=[[124,0]])
-participant_preprocessing(id=47,lextale_score=77.5,morph_score=90,changes=33,excluded_fixs=[[91,0],[95,0],[110,0]])
-participant_preprocessing(id=48,lextale_score=81.25,morph_score=90,changes=7.5)
-participant_preprocessing(id=49,lextale_score=75,morph_score=100,changes=33)
-participant_preprocessing(id=51,lextale_score=93.75,morph_score=85,changes=20)
-participant_preprocessing(id=52,lextale_score=80,morph_score=95,changes=5)
-participant_preprocessing(id=53,lextale_score=93.75,morph_score=85,changes=40)
-participant_preprocessing(id=54,lextale_score=80,morph_score=100,changes=6)
-participant_preprocessing(id=55,lextale_score=83.75,morph_score=95,changes=17)
-participant_preprocessing(id=58,lextale_score=81.25,morph_score=70,changes=3)
-participant_preprocessing(id=59,lextale_score=78.75,morph_score=90,changes=5)
+participant_preprocessing(id=42,lextale_score=98.75,morph_score=100,changes=30,excluded_fixs=[[9,1]],gender='F',age=32)
+participant_preprocessing(id=43,lextale_score=86.25,morph_score=95,changes=3,gender='M',age=24)
+participant_preprocessing(id=45,lextale_score=93.75,morph_score=100,changes=40,gender='F',age=20)
+participant_preprocessing(id=46,lextale_score=81.25,morph_score=75,changes=30,excluded_fixs=[[124,0]],gender='M',age=22)
+participant_preprocessing(id=47,lextale_score=77.5,morph_score=90,changes=33,excluded_fixs=[[92,0],[96,0],[111,0]],gender='M',age=25)
+participant_preprocessing(id=48,lextale_score=81.25,morph_score=90,changes=7.5,gender='M',age=28)
+participant_preprocessing(id=49,lextale_score=75,morph_score=100,changes=33,gender='F',age=23)
+participant_preprocessing(id=51,lextale_score=93.75,morph_score=85,changes=20,gender='M',age=37)
+participant_preprocessing(id=52,lextale_score=80,morph_score=95,changes=5,gender='F',age=23)
+participant_preprocessing(id=53,lextale_score=93.75,morph_score=85,changes=40,gender='F',age=25)
+participant_preprocessing(id=54,lextale_score=80,morph_score=100,changes=6,gender='M',age=26)
+participant_preprocessing(id=55,lextale_score=83.75,morph_score=95,changes=17,gender='F',age=24)
+participant_preprocessing(id=58,lextale_score=81.25,morph_score=70,changes=3,gender='F',age=18)
+participant_preprocessing(id=59,lextale_score=78.75,morph_score=90,changes=5,gender='F',age=33)
+participant_preprocessing(id=60,lextale_score=96.25,morph_score=85,changes=7.5,gender='M',age=22)
+participant_preprocessing(id=63,lextale_score=86.25,morph_score=85,changes=20,excluded_fixs=[[84,0]],gender='M',age=22)
+participant_preprocessing(id=64,lextale_score=83.75,morph_score=85,changes=37.5,gender='F',age=23)
+participant_preprocessing(id=65,lextale_score=75,morph_score=75,changes=8,excluded_fixs=[[33,0]],gender='M',age=25)
+participant_preprocessing(id=66,lextale_score=75,morph_score=95,changes=0,excluded_fixs=[[115,0]],gender='F',age=32)
+participant_preprocessing(id=67,lextale_score=93.75,morph_score=95,changes=35,excluded_fixs=[[122,1],[122,0]],gender='F')
+participant_preprocessing(id=68,lextale_score=93.75,morph_score=100,changes=35,gender='M',age=37)
+participant_preprocessing(id=69,lextale_score=93.75,morph_score=95,changes=12.5,excluded_fixs=[[38,0],[39,1],[39,0],[113,0]],gender='M')
 
 # combine all participant datafiles into large dataframe
 all_ET = pd.DataFrame()
