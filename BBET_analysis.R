@@ -15,7 +15,7 @@ library(lmerTest);
 library(emmeans);
 
 # colours
-cols <- paletteer_d("colorBlindness::SteppedSequential5Steps");
+cols <- paletteer::scale_colour_paletteer_d("colorBlindness::SteppedSequential5Steps");
 simple_col <- "#1a8de5";
 complex_col <- "#859a2f";
 green_col <- "#2b725a";
@@ -68,6 +68,19 @@ summary(all_scores);
 summary(all_scores$comp_score);
 # min=80.00, Q1=93.09, med=95.00, mean=95.08, Q3=97.50, max=100
 
+# NAs are for the trials with skipped N-1 words or target words
+all_data <- merge(all_ET, all_scores,by="sbj_ID");
+
+word_data <- read.csv("C:/Users/annal/Documents/Me/SISSA/BBET/BBET_design/full_word_data.csv",header=T,sep=",");
+word_data$morph_type <- as.factor(word_data$morph_type);
+word_data$target <- as.factor(word_data$target);
+word_data$cognate <- as.factor(word_data$cognate);
+word_data$legal_nonword <- as.factor(word_data$legal_nonword);
+word_data$Illegal_nonword <- as.factor(word_data$Illegal_nonword);
+summary(word_data);
+
+all_data <- merge(subset(all_data,select=-c(morph_type)),word_data,by="target");
+
 ggplot(all_scores, aes(x=comp_score)) +
   geom_histogram(aes(y=after_stat(density)),binwidth=1,colour="black") +
   geom_vline(aes(xintercept=mean(comp_score)),colour="red",linewidth=1) +
@@ -79,7 +92,7 @@ ggplot(all_scores, aes(x=comp_score)) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
         axis.line = element_line(colour="black"),
-        text = element_text(family="CMU Serif",size=35,color="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
         legend.background=element_rect(fill=NA))
 
 mean(all_scores$comp_score)-2.5*sd(all_scores$comp_score); # min=84.19
@@ -91,11 +104,6 @@ for (i in all_scores$sbj_ID) {
     print(paste("Participant ",i," had a comprehension check score below 2.5*SD."))
   }
 }
-# EXCLUDE PARTICIPANT 58
-
-all_scoresclean <- all_scores[!all_scores$sbj_ID %in% c('58'),];
-all_ETclean <- all_ET[!all_ET$sbj_ID %in% c('58'),];
-# now n=49
 
 # Correlation of all gaze metrics ----------------------------------------
 cor(all_ETclean[all_ETclean$trial_issue=="N",
@@ -114,43 +122,111 @@ cor(all_ETclean[all_ETclean$trial_issue=="N",
                 c("GD_cleanedfixs","FFD_cleanedfixs","GPD_cleanedfixs","FoM_cleanedfixs")],
     use='pairwise.complete.obs'); # cleaned data (no short or long fixs)
 
-all_data <- merge(all_ETclean, all_scoresclean,by="sbj_ID");
-# NAs are for the trials with skipped N-1 words or target words
+# exclude all FFD points if over 800ms
+all_data$FFD_noover800 <- all_data$FFD_all;
+all_data$FFD_noover800[all_data$FFD_noover800>800] <- NA;
+all_data$FFD_cleanedfixs[all_data$FFD_cleanedfixs>800] <- NA;
 
 # ET metrics histograms
-par(mfrow=c(2,2));
-par(mar=c(5,5,2,2));
-hist(all_data$GD_all[all_data$trial_issue=='N'],breaks=50,main="GD",xlab="GD (ms)");
-hist(all_data$FFD_all[all_data$trial_issue=='N'],breaks=50,main="FFD",xlab="FFD (ms)");
-hist(all_data$GPD_all[all_data$trial_issue=='N'],breaks=seq(0,16000,100),main="GPD",xlab="GPD (ms)");
-hist(all_data$FoM_all[all_data$trial_issue=='N'],breaks=50,main="FoM",xlab="FoM (ms)");
-par(mfrow=c(1,1));
-hist(all_data$GPD_all[all_data$GPD_all<2000 & all_data$trial_issue=='N'],breaks=50);
-hist(all_data$GPD_all[all_data$GPD_all>2000 & all_data$trial_issue=='N'],breaks=50); # excluded? okay?
+all_data_long <- gather(all_data, key="ETmeasure", value="count", c('GD_all','FFD_all','FoM_all','GPD_all'));
+all_data_long_sbj58 <- all_data_long[all_data_long$sbj_ID=='58',];
 
-# ET metrics boxplots
-par(mfrow=c(2,2));
-boxplot(all_data$GD_all, main="GD", ylab = "GD (ms)",yaxs="i");
-abline(h=mean(all_data$GD_all), lty=5);
-boxplot(all_data$FFD_all, main="FFD", ylab = "FFD (ms)",yaxs="i");
-abline(h=mean(all_data$FFD_all), lty=5);
-boxplot(all_data$GPD_all, main="GPD", ylab = "GPD (ms)",yaxs="i");
-abline(h=mean(all_data$GPD_all), lty=5);
-boxplot(all_data$FoM_all, main="FoM", ylab = "FoM (ms)",yaxs="i");
-abline(h=mean(all_data$FoM_all), lty=5);
-par(mfrow=c(1,1));
+ggplot(all_data_long[all_data_long$trial_issue=='N',], aes(x=count)) +
+  geom_histogram(colour='black',binwidth=100) +
+  facet_wrap(~ETmeasure, scales='free') +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+clean_data_long <- gather(all_data, key="ETmeasure", value="count", c('GD_cleanedfixs','FFD_cleanedfixs','FoM_cleanedfixs','GPD_cleanedfixs'));
+
+ggplot(clean_data_long[clean_data_long$trial_issue=='N',], aes(x=count)) +
+  geom_histogram(colour='black',binwidth=100) +
+  facet_wrap(~ETmeasure, scales='free') +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+# boxplots of data
+mean_data <- all_data[all_data$trial_issue=='N',] %>%
+  group_by(sbj_ID) %>%
+  summarise_at(vars(GD_all,FFD_all,FoM_all,GPD_all),
+               list(Mean = mean),na.rm=TRUE)
+
+outliers_GPD <- mean_data %>%
+  group_by() %>%  # no grouping variable, but keeps dplyr happy
+  mutate(
+    Q1 = quantile(GPD_all_Mean, 0.25, na.rm = TRUE),
+    Q3 = quantile(GPD_all_Mean, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1
+  ) %>%
+  filter(GPD_all_Mean < Q1 - 1.5 * IQR | GPD_all_Mean > Q3 + 1.5 * IQR);
+
+ggplot(mean_data, aes(y=GD_all_Mean)) +
+  geom_boxplot() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+ggplot(mean_data, aes(x=1,y=GPD_all_Mean)) +
+  geom_boxplot(outlier.shape = NA) +  # hide default outliers
+  geom_point(data=outliers_GPD,colour="red",size=3) +
+  geom_text(data=outliers_GPD,aes(label=sbj_ID),hjust=-0.3,size=8,family="CMU Serif") +
+  theme(
+    axis.text.x=element_blank(),axis.ticks.x=element_blank(),
+    axis.title.x=element_blank(),panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank(),panel.background=element_blank(), 
+    axis.line=element_line(colour="black"),
+    text=element_text(family="CMU Serif",size=35, colour = "black"),
+    legend.background = element_rect(fill = NA));
+# mean(GPD_all) = 523ms
+# mean(GPD_all) for sbj 58 = 998ms
+
+ggplot(mean_data, aes(y=FFD_all_Mean)) +
+  geom_boxplot() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+ggplot(mean_data, aes(y=FoM_all_Mean)) +
+  geom_boxplot() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+# EXCLUDE PARTICIPANT 58
+
+all_scoresclean <- all_scores[!all_scores$sbj_ID %in% c('58'),];
+all_ETclean <- all_ET[!all_ET$sbj_ID %in% c('58'),];
+all_data_clean <- merge(all_ETclean, all_scoresclean,by="sbj_ID");
+all_data_clean <- merge(subset(all_data_clean,select=-c(morph_type)),word_data,by="target");
+# now n=49
+
+# participants who possibly saw some previews
+preview_participants <- c('15','16','17','25','31','38','42','45','53');
+all_data_nopreviews <- all_data[!all_data_clean$sbj_ID %in% preview_participants,];
 
 
 # Plotting -------------------------------------------------------------
 setwd("C:/Users/annal/Documents/Me/SISSA/BBET/BBET_analysis/full_analysis");
 
 # FFD
-FFD_plt <- ggplot(all_data[all_data$trial_issue=='N',], aes(x=trial_type, y=FFD_cleanedfixs, color=morph_type, group=morph_type)) + 
-  scale_color_manual(values=c(simple_col,complex_col)) +
-  labs(x = "Condition", y = "FFD (ms)", color = "Morphology type") +
+FFD_plt <- ggplot(all_data_nopreviews[all_data_nopreviews$trial_issue=='N',], aes(x=trial_type, y=FFD_cleanedfixs, colour=morph_type, group=morph_type)) + 
+  scale_colour_manual(values=c(simple_col,complex_col)) +
+  labs(x = "Condition", y = "FFD (ms)", colour = "Morphology type") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text = element_text(family = "CMU Serif", size = 30, color = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 30, colour = "black"),
         text=element_text(family="CMU Serif",size=40),
         legend.position=c(0.3,0.9),
         rect = element_rect(fill="transparent")) +
@@ -161,12 +237,12 @@ FFD_plt <- ggplot(all_data[all_data$trial_issue=='N',], aes(x=trial_type, y=FFD_
 ggsave(FFD_plt, filename = "FFD_bycondition.png", bg = "transparent", width=7,height=6);
 
 #FoM
-FoM_plt <- ggplot(all_data[all_data$trial_issue=='N',], aes(x=trial_type, y=FoM_cleanedfixs, color=morph_type, group=morph_type)) + 
-  scale_color_manual(values=c(simple_col,complex_col)) +
-  labs(x = "Condition", y = "FoM (ms)", color = "Morphology type") +
+FoM_plt <- ggplot(all_data_nopreviews[all_data_nopreviews$trial_issue=='N',], aes(x=trial_type, y=FoM_cleanedfixs, colour=morph_type, group=morph_type)) + 
+  scale_colour_manual(values=c(simple_col,complex_col)) +
+  labs(x = "Condition", y = "FoM (ms)", colour = "Morphology type") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text = element_text(family = "CMU Serif", size = 30, color = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 30, colour = "black"),
         text=element_text(family="CMU Serif",size=40),
         legend.position=c(0.3,0.9),
         rect = element_rect(fill="transparent")) +
@@ -179,12 +255,12 @@ ggsave(FoM_plt, filename = "FoM_bycondition.png", bg = "transparent", width=7,he
 # there was only 1 fixation for that trial, leading to removed rows
 
 # GD
-GD_plt <- ggplot(all_data[all_data$trial_issue=='N',], aes(x=trial_type, y=GD_cleanedfixs, color=morph_type, group=morph_type)) + 
-  scale_color_manual(values=c(simple_col,complex_col)) +
-  labs(x = "Condition", y = "GD (ms)", color = "Morphology type") +
+GD_plt <- ggplot(all_data_nopreviews[all_data_nopreviews$trial_issue=='N',], aes(x=trial_type, y=GD_cleanedfixs, colour=morph_type, group=morph_type)) + 
+  scale_colour_manual(values=c(simple_col,complex_col)) +
+  labs(x = "Condition", y = "GD (ms)", colour = "Morphology type") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text = element_text(family = "CMU Serif", size = 30, color = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 30, colour = "black"),
         text=element_text(family="CMU Serif",size=40),
         legend.position=c(0.3,0.9),
         rect = element_rect(fill="transparent")) +
@@ -195,12 +271,12 @@ GD_plt <- ggplot(all_data[all_data$trial_issue=='N',], aes(x=trial_type, y=GD_cl
 ggsave(GD_plt, filename = "GD_bycondition.png", bg = "transparent", width=7,height=6);
 
 # GPD
-GPD_plt <- ggplot(all_data[all_data$trial_issue=='N',], aes(x=trial_type, y=GPD_cleanedfixs, color=morph_type, group=morph_type)) + 
-  scale_color_manual(values=c(simple_col,complex_col)) +
-  labs(x = "Condition", y = "GPD (ms)", color = "Morphology type") +
+GPD_plt <- ggplot(all_data_nopreviews[all_data_nopreviews$trial_issue=='N',], aes(x=trial_type, y=GPD_cleanedfixs, colour=morph_type, group=morph_type)) + 
+  scale_colour_manual(values=c(simple_col,complex_col)) +
+  labs(x = "Condition", y = "GPD (ms)", colour = "Morphology type") +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.text = element_text(family = "CMU Serif", size = 30, color = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 30, colour = "black"),
         text=element_text(family="CMU Serif",size=40),
         legend.position=c(0.3,0.9),
         rect = element_rect(fill="transparent")) +
@@ -212,120 +288,120 @@ ggsave(GPD_plt, filename = "GPD_bycondition.png", bg = "transparent", width=7,he
 
 # Means for each condition ------------------------------------------------
 ## FFD ----
-FFD_sID <- mean(all_data$FFD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='identical']);
-# 253ms
-FFD_sCG <- mean(all_data$FFD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='cognate']);
-# 279ms
-FFD_sLN <- mean(all_data$FFD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='legal_nonword']);
+FFD_sID <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
+# 255ms
+FFD_sCG <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
 # 278ms
-FFD_sIN <- mean(all_data$FFD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='illegal_nonword']);
-# 303ms
-FFD_cID <- mean(all_data$FFD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='identical']);
-# 256ms
-FFD_cCG <- mean(all_data$FFD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='cognate']);
-# 267ms
-FFD_cLN <- mean(all_data$FFD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='legal_nonword']);
-# 276ms
-FFD_cIN <- mean(all_data$FFD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='illegal_nonword']);
-# 297ms
+FFD_sLN <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
+# 279ms
+FFD_sIN <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
+# 302ms
+FFD_cID <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
+# 257ms
+FFD_cCG <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
+# 268ms
+FFD_cLN <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
+# 277ms
+FFD_cIN <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
+# 298ms
 FFDsimple <- c(FFD_sID, FFD_sCG, FFD_sLN, FFD_sIN);
 FFDcomplex <- c(FFD_cID, FFD_cCG, FFD_cLN, FFD_cIN);
 FFD <- data.frame(FFDsimple,FFDcomplex);
 colnames(FFD) <- c("simple","complex");
 rownames(FFD) <- c("ID","CG","LN","IN");
 
-FFD_IDcost <- FFD_sCG - FFD_sID; # 26.08ms
-FFD_complexcost <- mean(c(FFD_cID-FFD_sID,FFD_cIN-FFD_sIN,FFD_cIN-FFD_sIN)); # -2.81ms
-FFD_Sbenefit <- FFD_sCG-FFD_sLN; # 0.25ms
-FFD_Obenefit <- FFD_sLN-FFD_sIN; # -24.30ms
-FFD_Mbenefit <- -(FFD_complexcost - (FFD_cCG-FFD_sCG)); # -8.60ms
+FFD_IDcost <- FFD_sCG - FFD_sID; # 22.64ms
+FFD_complexcost <- mean(c(FFD_cID-FFD_sID,FFD_cIN-FFD_sIN,FFD_cIN-FFD_sIN)); # -2.13ms
+FFD_Sbenefit <- FFD_sCG-FFD_sLN; # -0.89ms
+FFD_Obenefit <- FFD_sLN-FFD_sIN; # -23.48ms
+FFD_Mbenefit <- -(FFD_complexcost - (FFD_cCG-FFD_sCG)); # -7.59ms
   
 ## FoM ----
-FoM_sID <- mean(all_data$FoM_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='identical'],na.rm=TRUE);
-# 241ms
-FoM_sCG <- mean(all_data$FoM_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='cognate'],na.rm=TRUE);
-# 261ms
-FoM_sLN <- mean(all_data$FoM_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='legal_nonword'],na.rm=TRUE);
-# 253ms
-FoM_sIN <- mean(all_data$FoM_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 276ms
-FoM_cID <- mean(all_data$FoM_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='identical'],na.rm=TRUE);
-# 245ms
-FoM_cCG <- mean(all_data$FoM_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='cognate'],na.rm=TRUE);
-# 251ms
-FoM_cLN <- mean(all_data$FoM_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='legal_nonword'],na.rm=TRUE);
-# 262ms
-FoM_cIN <- mean(all_data$FoM_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 267ms
+FoM_sID <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
+# 243ms
+FoM_sCG <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
+# 260ms
+FoM_sLN <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
+# 252ms
+FoM_sIN <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
+# 274ms
+FoM_cID <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
+# 247ms
+FoM_cCG <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
+# 250ms
+FoM_cLN <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
+# 264ms
+FoM_cIN <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
+# 269ms
 FoMsimple <- c(FoM_sID, FoM_sCG, FoM_sLN, FoM_sIN);
 FoMcomplex <- c(FoM_cID, FoM_cCG, FoM_cLN, FoM_cIN);
 FoM <- data.frame(FoMsimple,FoMcomplex);
 colnames(FoM) <- c("simple","complex");
 rownames(FoM) <- c("ID","CG","LN","IN");
 
-FoM_IDcost <- FoM_sCG - FoM_sID; # 20.22ms
-FoM_complexcost <- mean(c(FoM_cID-FoM_sID,FoM_cIN-FoM_sIN,FoM_cIN-FoM_sIN)); # -4.94ms
-FoM_Sbenefit <- FoM_sCG-FoM_sLN; # 7.83ms
-FoM_Obenefit <- FoM_sLN-FoM_sIN; # -23.24ms
-FoM_Mbenefit <- -(FoM_complexcost - (FoM_cCG-FoM_sCG)); # -4.65ms
+FoM_IDcost <- FoM_sCG - FoM_sID; # 17.05ms
+FoM_complexcost <- mean(c(FoM_cID-FoM_sID,FoM_cIN-FoM_sIN,FoM_cIN-FoM_sIN)); # -1.97ms
+FoM_Sbenefit <- FoM_sCG-FoM_sLN; # 7.86ms
+FoM_Obenefit <- FoM_sLN-FoM_sIN; # -22.04ms
+FoM_Mbenefit <- -(FoM_complexcost - (FoM_cCG-FoM_sCG)); # -7.52ms
 
 ## GPD ----
-GPD_sID <- mean(all_data$GPD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='identical']);
-# 414ms
-GPD_sCG <- mean(all_data$GPD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='cognate']);
-# 459ms
-GPD_sLN <- mean(all_data$GPD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='legal_nonword']);
-# 473ms
-GPD_sIN <- mean(all_data$GPD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='illegal_nonword']);
-# 591ms
-GPD_cID <- mean(all_data$GPD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='identical']);
-# 446ms
-GPD_cCG <- mean(all_data$GPD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='cognate']);
-# 493ms
-GPD_cLN <- mean(all_data$GPD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='legal_nonword']);
-# 515ms
-GPD_cIN <- mean(all_data$GPD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='illegal_nonword']);
-# 596ms
+GPD_sID <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
+# 424ms
+GPD_sCG <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
+# 472ms
+GPD_sLN <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
+# 482ms
+GPD_sIN <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
+# 599ms
+GPD_cID <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
+# 453ms
+GPD_cCG <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
+# 504ms
+GPD_cLN <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
+# 520ms
+GPD_cIN <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
+# 614ms
 GPDsimple <- c(GPD_sID, GPD_sCG, GPD_sLN, GPD_sIN);
 GPDcomplex <- c(GPD_cID, GPD_cCG, GPD_cLN, GPD_cIN);
 GPD <- data.frame(GPDsimple,GPDcomplex);
 colnames(GPD) <- c("simple","complex");
 rownames(GPD) <- c("ID","CG","LN","IN");
 
-GPD_IDcost <- GPD_sCG - GPD_sID; # 45.51ms
-GPD_complexcost <- mean(c(GPD_cID-GPD_sID,GPD_cIN-GPD_sIN,GPD_cIN-GPD_sIN)); # 14.20ms
-GPD_Sbenefit <- GPD_sCG-GPD_sLN; # -13.87ms
-GPD_Obenefit <- GPD_sLN-GPD_sIN; # -118.18ms
-GPD_Mbenefit <- -(GPD_complexcost - (GPD_cCG-GPD_sCG)); # 19.37ms
+GPD_IDcost <- GPD_sCG - GPD_sID; # 48.87ms
+GPD_complexcost <- mean(c(GPD_cID-GPD_sID,GPD_cIN-GPD_sIN,GPD_cIN-GPD_sIN)); # 19.88ms
+GPD_Sbenefit <- GPD_sCG-GPD_sLN; # -9.31ms
+GPD_Obenefit <- GPD_sLN-GPD_sIN; # -117.01ms
+GPD_Mbenefit <- -(GPD_complexcost - (GPD_cCG-GPD_sCG)); # 11.70ms
 
 ## GD ----
-GD_sID <- mean(all_data$GD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='identical']);
-# 338ms
-GD_sCG <- mean(all_data$GD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='cognate']);
-# 368ms
-GD_sLN <- mean(all_data$GD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='legal_nonword']);
-# 375ms
-GD_sIN <- mean(all_data$GD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='simple'&all_data$trial_type=='illegal_nonword']);
-# 399ms
-GD_cID <- mean(all_data$GD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='identical']);
+GD_sID <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
+# 343ms
+GD_sCG <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
+# 372ms
+GD_sLN <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
+# 379ms
+GD_sIN <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
 # 401ms
-GD_cCG <- mean(all_data$GD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='cognate']);
-# 401ms
-GD_cLN <- mean(all_data$GD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='legal_nonword']);
-# 418ms
-GD_cIN <- mean(all_data$GD_cleanedfixs[all_data$trial_issue=='N'&all_data$morph_type=='complex'&all_data$trial_type=='illegal_nonword']);
-# 448ms
+GD_cID <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
+# 408ms
+GD_cCG <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
+# 411ms
+GD_cLN <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
+# 422ms
+GD_cIN <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
+# 453ms
 GDsimple <- c(GD_sID, GD_sCG, GD_sLN, GD_sIN);
 GDcomplex <- c(GD_cID, GD_cCG, GD_cLN, GD_cIN);
 GD <- data.frame(GDsimple,GDcomplex);
 colnames(GD) <- c("simple","complex");
 rownames(GD) <- c("ID","CG","LN","IN");
 
-GD_IDcost <- GD_sCG - GD_sID; # 30.34ms
-GD_complexcost <- mean(c(GD_cID-GD_sID,GD_cIN-GD_sIN,GD_cIN-GD_sIN)); # 54.02ms
-GD_Sbenefit <- GD_sCG-GD_sLN; # -7.61ms
-GD_Obenefit <- GD_sLN-GD_sIN; # -23.13ms
-GD_Mbenefit <- -(GD_complexcost - (GD_cCG-GD_sCG)); # -21.35ms
+GD_IDcost <- GD_sCG - GD_sID; # 28.47ms
+GD_complexcost <- mean(c(GD_cID-GD_sID,GD_cIN-GD_sIN,GD_cIN-GD_sIN)); # 56.19ms
+GD_Sbenefit <- GD_sCG-GD_sLN; # -7.11ms
+GD_Obenefit <- GD_sLN-GD_sIN; # -22.64ms
+GD_Mbenefit <- -(GD_complexcost - (GD_cCG-GD_sCG)); # -16.84ms
 
 ## All costs/benefits together ----
 FFD_costs <- c(FFD_IDcost,FFD_complexcost,FFD_Obenefit,FFD_Sbenefit,FFD_Mbenefit);
@@ -346,7 +422,7 @@ FFD_costs <- ggplot(all_costs, aes(x=type, y=FFD)) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.title.x = element_blank(),
-        axis.text = element_text(family = "CMU Serif", size = 20, color = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
         text=element_text(family="CMU Serif",size=40),
         rect = element_rect(fill="transparent"));
 ggsave(FFD_costs, filename = "FFD_costs.png", bg = "transparent", width=7,height=6);
@@ -358,7 +434,7 @@ FoM_costs <- ggplot(all_costs, aes(x=type, y=FoM)) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.title.x = element_blank(),
-        axis.text = element_text(family = "CMU Serif", size = 20, color = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
         text=element_text(family="CMU Serif",size=40),
         rect = element_rect(fill="transparent"));
 ggsave(FoM_costs, filename = "FoM_costs.png", bg = "transparent", width=7,height=6);
@@ -370,7 +446,7 @@ GPD_costs <- ggplot(all_costs, aes(x=type, y=GPD)) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.title.x = element_blank(),
-        axis.text = element_text(family = "CMU Serif", size = 20, color = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
         text=element_text(family="CMU Serif",size=40),
         rect = element_rect(fill="transparent"));
 ggsave(GPD_costs, filename = "GPD_costs.png", bg = "transparent", width=7,height=6);
@@ -382,7 +458,7 @@ GD_costs <- ggplot(all_costs, aes(x=type, y=GD)) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_line(colour = "black"),
         axis.title.x = element_blank(),
-        axis.text = element_text(family = "CMU Serif", size = 20, color = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
         text=element_text(family="CMU Serif",size=40),
         rect = element_rect(fill="transparent"));
 ggsave(GD_costs, filename = "GD_costs.png", bg = "transparent", width=7,height=6);
@@ -393,53 +469,108 @@ ggsave(GD_costs, filename = "GD_costs.png", bg = "transparent", width=7,height=6
 all_data <- all_data %>% 
   mutate(morph_coded = case_when(morph_type == 'simple' ~ -0.5,
                                  morph_type == 'complex' ~ 0.5))
+
+emm_options(lmerTest.limit = 12150, pbkrtest.limit = 12150,
+            lmer.df="satterthwaite");
+
 # all data
-lm_FFD_all <- lmer(FFD_all ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_FFD_all, pairwise ~ trial_type, adjust = "tukey");
-lm_FoM_all <- lmer(FoM_all ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_FoM_all, pairwise ~ trial_type, adjust = "tukey");
-lm_GD_all <- lmer(GD_all ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_GD_all, pairwise ~ trial_type, adjust = "tukey");
-lm_GPD_all <- lmer(GPD_all ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_GPD_all, pairwise ~ trial_type, adjust = "tukey");
+lm_FFD_all <- lmer(FFD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FFD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_FoM_all <- lmer(FoM_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FoM_all, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GD_all <- lmer(GD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GPD_all <- lmer(GPD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GPD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
 
 # all data without long GPDs
-lm_FFD_nolongGPDs <- lmer(FFD_all ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N',]);
-emmeans(lm_FFD_nolongGPDs, pairwise ~ trial_type, adjust = "tukey");
-lm_FoM_nolongGPDs <- lmer(FoM_all ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N',]);
-emmeans(lm_FoM_nolongGPDs, pairwise ~ trial_type, adjust = "tukey");
-lm_GD_nolongGPDs <- lmer(GD_all ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N',]);
-emmeans(lm_GD_nolongGPDs, pairwise ~ trial_type, adjust = "tukey");
-lm_GPD_nolongGPDs <- lmer(GPD_all ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N',]);
-emmeans(lm_GPD_nolongGPDs, pairwise ~ trial_type, adjust = "tukey");
+lm_FFD_nolongGPDs <- lmer(FFD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N',]);
+summary(emmeans(lm_FFD_nolongGPDs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_nolongGPDs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_FoM_nolongGPDs <- lmer(FoM_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N',]);
+summary(emmeans(lm_FoM_nolongGPDs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_nolongGPDs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GD_nolongGPDs <- lmer(GD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N',]);
+summary(emmeans(lm_GD_nolongGPDs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_nolongGPDs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GPD_nolongGPDs <- lmer(GPD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N',]);
+summary(emmeans(lm_GPD_nolongGPDs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_nolongGPDs, pairwise~trial_type|morph_type), adjust="bonferroni");
 
 # all data without short fixations
-lm_FFD_noshortfixs <- lmer(FFD_noshortfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_FFD_noshortfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_FoM_noshortfixs <- lmer(FoM_noshortfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_FoM_noshortfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_GD_noshortfixs <- lmer(GD_noshortfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_GD_noshortfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_GPD_noshortfixs <- lmer(GPD_noshortfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_GPD_noshortfixs, pairwise ~ trial_type, adjust = "tukey");
+lm_FFD_noshortfixs <- lmer(FFD_noshortfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FFD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_FoM_noshortfixs <- lmer(FoM_noshortfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FoM_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GD_noshortfixs <- lmer(GD_noshortfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GPD_noshortfixs <- lmer(GPD_noshortfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GPD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
 
 # all data without long fixations
-lm_FFD_nolongfixs <- lmer(FFD_nolongfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_FFD_nolongfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_FoM_nolongfixs <- lmer(FoM_nolongfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_FoM_nolongfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_GD_nolongfixs <- lmer(GD_nolongfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_GD_nolongfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_GPD_nolongfixs <- lmer(GPD_nolongfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_GPD_nolongfixs, pairwise ~ trial_type, adjust = "tukey");
+lm_FFD_nolongfixs <- lmer(FFD_nolongfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FFD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_FoM_nolongfixs <- lmer(FoM_nolongfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FoM_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GD_nolongfixs <- lmer(GD_nolongfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GPD_nolongfixs <- lmer(GPD_nolongfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GPD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
 
 # all data without short or long fixations
-lm_FFD_cleanedfixs <- lmer(FFD_cleanedfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_FFD_cleanedfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_FoM_cleanedfixs <- lmer(FoM_cleanedfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_FoM_cleanedfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_GD_cleanedfixs <- lmer(GD_cleanedfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_GD_cleanedfixs, pairwise ~ trial_type, adjust = "tukey");
-lm_GPD_cleanedfixs <- lmer(GPD_cleanedfixs ~ scale(trial_id) + morph_score + lextale_score + changes_seen + morph_coded*trial_type + (1|sbj_ID), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-emmeans(lm_GPD_cleanedfixs, pairwise ~ trial_type, adjust = "tukey")
+lm_FFD_cleanedfixs <- lmer(FFD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_clean[all_data_clean$trial_issue=='N'|all_data_clean$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FFD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
 
+lm_FoM_cleanedfixs <- lmer(FoM_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_clean[all_data_clean$trial_issue=='N'|all_data_clean$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FoM_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GD_cleanedfixs <- lmer(GD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_clean[all_data_clean$trial_issue=='N'|all_data_clean$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GPD_cleanedfixs <- lmer(GPD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_clean[all_data_clean$trial_issue=='N'|all_data_clean$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GPD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+# all data without participants having seen previews
+lm_FFD_nopreviews <- lmer(FFD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N'|all_data_nopreviews$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FFD_nopreviews, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_FoM_nopreviews <- lmer(FoM_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N'|all_data_nopreviews$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_FoM_nopreviews, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GD_nopreviews <- lmer(GD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N'|all_data_nopreviews$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GD_nopreviews, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni");
+
+lm_GPD_nopreviews <- lmer(GPD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N'|all_data_nopreviews$trial_issue=='LONG_GPD',]);
+summary(emmeans(lm_GPD_nopreviews, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni")

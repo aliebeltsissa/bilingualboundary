@@ -407,18 +407,24 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
 
             # no short fixations
             GD_noshortfixs = eyekit.measure.gaze_duration(trial_rec['TextBlock']['target'], trial_rec['noshorts_seq'])
+            if GD_noshortfixs == 0:
+                GD_noshortfixs = 'n/a'
             trial_rec['GD_noshortfixs'] = GD_noshortfixs
             GDs_noshortfixs.append(GD_noshortfixs)
 
             FFD_noshortfixs = eyekit.measure.initial_fixation_duration(trial_rec['TextBlock']['target'], trial_rec['noshorts_seq'])
+            if FFD_noshortfixs == 0:
+                FFD_noshortfixs = 'n/a'
             trial_rec['FFD_noshortfixs'] = FFD_noshortfixs
             FFDs_noshortfixs.append(FFD_noshortfixs)
             
             GPD_noshortfixs = eyekit.measure.go_past_duration(trial_rec['TextBlock']['target'], trial_rec['noshorts_seq'])
+            if GPD_noshortfixs == 0:
+                GPD_noshortfixs = 'n/a'
             trial_rec['GPD_noshortfixs'] = GPD_noshortfixs
             GPDs_noshortfixs.append(GPD_noshortfixs)
 
-            if FFD_noshortfixs != GD_noshortfixs:
+            if FFD_noshortfixs != GD_noshortfixs and FFD_noshortfixs != 'n/a':
                 FoM_noshortfixs = FFD_noshortfixs
                 trial_rec['FoM_noshortfixs'] = FoM_noshortfixs
             else:
@@ -449,18 +455,24 @@ def participant_preprocessing(id, lextale_score, morph_score, changes, excluded_
 
             # cleaned fixations
             GD_cleanedfixs = eyekit.measure.gaze_duration(trial_rec['TextBlock']['target'], trial_rec['cleaned_seq'])
+            if GD_cleanedfixs == 0:
+                GD_cleanedfixs = 'n/a'
             trial_rec['GD_cleanedfixs'] = GD_cleanedfixs
             GDs_cleanedfixs.append(GD_cleanedfixs)
 
             FFD_cleanedfixs = eyekit.measure.initial_fixation_duration(trial_rec['TextBlock']['target'], trial_rec['cleaned_seq'])
+            if FFD_cleanedfixs == 0:
+                FFD_cleanedfixs = 'n/a'
             trial_rec['FFD_cleanedfixs'] = FFD_cleanedfixs
             FFDs_cleanedfixs.append(FFD_cleanedfixs)
             
             GPD_cleanedfixs = eyekit.measure.go_past_duration(trial_rec['TextBlock']['target'], trial_rec['cleaned_seq'])
+            if GPD_cleanedfixs == 0:
+                GPD_cleanedfixs = 'n/a'
             trial_rec['GPD_cleanedfixs'] = GPD_cleanedfixs
             GPDs_cleanedfixs.append(GPD_cleanedfixs)
 
-            if FFD_cleanedfixs != GD_cleanedfixs:
+            if FFD_cleanedfixs != GD_cleanedfixs and FFD_cleanedfixs != 'n/a':
                 FoM_cleanedfixs = FFD_cleanedfixs
                 trial_rec['FoM_cleanedfixs'] = FoM_cleanedfixs
             else:
