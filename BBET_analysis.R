@@ -13,6 +13,9 @@ library(plotrix);
 library(scales);
 library(lmerTest);
 library(emmeans);
+library(tidyr);
+library(MuMIn);
+library(effects);
 
 # colours
 cols <- paletteer::scale_colour_paletteer_d("colorBlindness::SteppedSequential5Steps");
@@ -33,35 +36,22 @@ all_scores <- read.csv("all_scores.csv",header=T,sep=",");
 
 all_ET <- subset(all_ET, select = -c(X,post_target,type,TextBlock,adjusted_seq,fixations,rec_id,msgs,noshorts_seq));
 
-all_ET$trial_issue[all_ET$GPD_all>6000] <- "LONG_GPD";
 all_ET$morph_type <- factor(all_ET$morph_type, levels=c("simple", "complex"));
+all_ET$morph_type <- relevel(all_ET$morph_type,"simple");
 all_ET$lst_type <- factor(all_ET$lst_type);
 all_ET$target <- factor(all_ET$target);
 all_ET$preview <- factor(all_ET$preview);
 all_ET$trial_type <- factor(all_ET$trial_type, levels=c("identical", "cognate", "legal_nonword", "illegal_nonword"));
 all_ET$trial_issue <- factor(all_ET$trial_issue);
+all_ET$trial_issue[all_ET$trial_issue=='OUT-OF-BOUNDS'] <- 'N';
+all_ET$morph_type <- factor(all_ET$morph_type);
+all_ET$morph_type <- relevel(all_ET$morph_type,"simple");
 summary(all_ET);
 
 all_scores <- subset(all_scores, select = -c(X));
 all_scores$sbj_ID <- as.factor(all_scores$sbj_ID);
 all_scores$gender <- as.factor(all_scores$gender);
 summary(all_scores);
-# gender
-# F: 27, M: 23
-# age
-# min: 19, Q1: 20.25, med: 23, mean: 23.04, Q3: 25, max: 32 (6 NAs)
-# comp_score
-# min: 85%, Q1: 92.50%, med: 95%, mean: 95.12%, Q3: 97.50%, max: 100%
-# LexTALE
-# min: 75%, Q1: 80%, med: 85.62%, mean: 85.17%, Q3: 90%, max: 98.75%
-# morph_score
-# min: 75%, Q1: 85%, med: 90%, mean: 89.38%, Q3: 95%, max: 100%
-# changes_seen
-# min: 0%, Q1: 6.88%, med: 16%, mean: 16.41%, Q3: 23.13%, max: 40%
-# N.1_skips
-# min: 0, Q1: 2, med: 5, mean: 6, Q3: 9, max: 18, NAs: 7 (why do I have NAs?)
-# target_skips
-# min: 0, Q1: 0, med: 0, mean: 1.76, Q3: 2, max: 13, NAs: 7 (same question)
 
 ## Participant exclusions --------------------------------------------------
 # exclude participants with comprehension score lower than 2.5 SD from mean
@@ -72,7 +62,8 @@ summary(all_scores$comp_score);
 all_data <- merge(all_ET, all_scores,by="sbj_ID");
 
 word_data <- read.csv("C:/Users/annal/Documents/Me/SISSA/BBET/BBET_design/full_word_data.csv",header=T,sep=",");
-word_data$morph_type <- as.factor(word_data$morph_type);
+word_data$morph_type <- factor(word_data$morph_type);
+word_data$morph_type <- relevel(word_data$morph_type,"simple");
 word_data$target <- as.factor(word_data$target);
 word_data$cognate <- as.factor(word_data$cognate);
 word_data$legal_nonword <- as.factor(word_data$legal_nonword);
@@ -93,7 +84,7 @@ ggplot(all_scores, aes(x=comp_score)) +
         panel.background = element_blank(), 
         axis.line = element_line(colour="black"),
         text = element_text(family="CMU Serif",size=35,colour="black"),
-        legend.background=element_rect(fill=NA))
+        legend.background=element_rect(fill=NA));
 
 mean(all_scores$comp_score)-2.5*sd(all_scores$comp_score); # min=84.19
 mean(all_scores$comp_score); # mean=95.08
@@ -105,27 +96,6 @@ for (i in all_scores$sbj_ID) {
   }
 }
 
-# Correlation of all gaze metrics ----------------------------------------
-cor(all_ETclean[all_ETclean$trial_issue=="N",
-                c("GD_all","FFD_all","GPD_all","FoM_all")],
-    use='pairwise.complete.obs'); # all data
-
-cor(all_ETclean[all_ETclean$trial_issue=="N",
-                c("GD_noshortfixs","FFD_noshortfixs","GPD_noshortfixs","FoM_noshortfixs")],
-    use='pairwise.complete.obs'); # no short fixs
-
-cor(all_ETclean[all_ETclean$trial_issue=="N",
-                c("GD_nolongfixs","FFD_nolongfixs","GPD_nolongfixs","FoM_nolongfixs")],
-    use='pairwise.complete.obs'); # no long fixs
-
-cor(all_ETclean[all_ETclean$trial_issue=="N",
-                c("GD_cleanedfixs","FFD_cleanedfixs","GPD_cleanedfixs","FoM_cleanedfixs")],
-    use='pairwise.complete.obs'); # cleaned data (no short or long fixs)
-
-# exclude all FFD points if over 800ms
-all_data$FFD_noover800 <- all_data$FFD_all;
-all_data$FFD_noover800[all_data$FFD_noover800>800] <- NA;
-all_data$FFD_cleanedfixs[all_data$FFD_cleanedfixs>800] <- NA;
 
 # ET metrics histograms
 all_data_long <- gather(all_data, key="ETmeasure", value="count", c('GD_all','FFD_all','FoM_all','GPD_all'));
@@ -206,6 +176,7 @@ ggplot(mean_data, aes(y=FoM_all_Mean)) +
 
 # EXCLUDE PARTICIPANT 58
 
+## Dataframes ----
 all_scoresclean <- all_scores[!all_scores$sbj_ID %in% c('58'),];
 all_ETclean <- all_ET[!all_ET$sbj_ID %in% c('58'),];
 all_data_clean <- merge(all_ETclean, all_scoresclean,by="sbj_ID");
@@ -213,8 +184,238 @@ all_data_clean <- merge(subset(all_data_clean,select=-c(morph_type)),word_data,b
 # now n=49
 
 # participants who possibly saw some previews
-preview_participants <- c('15','16','17','25','31','38','42','45','53');
-all_data_nopreviews <- all_data[!all_data_clean$sbj_ID %in% preview_participants,];
+preview_participants <- c('15','16','25','31','38','42','45','53');
+all_ET_nopreviews <- all_ETclean[!all_ETclean$sbj_ID %in% preview_participants,];
+all_data_nopreviews <- all_data_clean[!all_data_clean$sbj_ID %in% preview_participants,];
+length(unique(all_data_nopreviews$sbj_ID)); # 41 participants total
+
+# participants who possibly saw some previews in at least 20% of trials
+preview20_participants <- c('25','31','38','42','45','53');
+all_ET_no20previews <- all_ETclean[!all_ETclean$sbj_ID %in% preview20_participants,];
+all_data_no20previews <- all_data_clean[!all_data_clean$sbj_ID %in% preview20_participants,];
+length(unique(all_data_no20previews$sbj_ID)); # 43 participants total
+
+## Log-transforming data ----
+all_data_no20previews$FFD_log <- log(all_data_no20previews$FFD_cleanedfixs);
+all_data_no20previews$FoM_log <- log(all_data_no20previews$FoM_cleanedfixs);
+all_data_no20previews$GD_log <- log(all_data_no20previews$GD_cleanedfixs);
+all_data_no20previews$GPD_log <- log(all_data_no20previews$GPD_cleanedfixs);
+
+plot(sort(all_data_no20previews$FFD_log));
+plot(sort(all_data_no20previews$FoM_log));
+plot(sort(all_data_no20previews$GD_log));
+plot(sort(all_data_no20previews$GPD_log));
+
+## FFDs < 800ms ----
+# exclude all FFD points if over 800ms
+all_data_no20previews$FFD_noover800 <- all_data_no20previews$FFD_all;
+all_data_no20previews$FFD_noover800[all_data_no20previews$FFD_noover800>800] <- NA;
+
+## Skip rates ----
+all_data_no20previews$skip <- 0;
+all_data_no20previews$skip[all_data_no20previews$trial_issue=='T_SKIP'] <- 1;
+
+summary(all_data_no20previews$trial_issue);
+prop.table(table(all_data_no20previews$trial_issue));
+# 5179 (94.66%) trials normal
+# 245 (4.48%) trials skipped N-1
+# 47 (0.86%) trials skipped target
+
+summary(all_data_no20previews$trial_type[all_data_no20previews$trial_issue=='T_SKIP']);
+prop.table(table(all_data_no20previews$trial_type[all_data_no20previews$trial_issue=='T_SKIP']));
+# identical skipped 27.66% of time
+# cognate skipped 28.79% of time
+# legal nonword skipped 21.28% of time
+# illegal nonword skipped 21.28% of time
+
+summary(all_data_no20previews$target_length[all_data_no20previews$trial_issue=='N']);
+summary(all_data_no20previews$target_length[all_data_no20previews$trial_issue=='T_SKIP']);
+# virtually identical
+
+summary(all_data_no20previews$target_zipf[all_data_no20previews$trial_issue=='N']);
+summary(all_data_no20previews$target_zipf[all_data_no20previews$trial_issue=='T_SKIP']);
+# virtually identical
+
+# contrast coding trial_type
+backward_diff <- matrix(c(-3/4, 1/4, 1/4, 1/4, -1/2, -1/2, 1/2, 1/2, 
+                            -1/4, -1/4, -1/4, 3/4), ncol = 3);
+all_data_no20previews$trial_type_cod <- all_data_no20previews$trial_type;
+contrasts(all_data_no20previews$trial_type_cod) <- backward_diff;
+
+prereg_data <- subset(all_data_no20previews, trial_issue == "N");
+
+
+
+# ET measures visualisation ----
+ggplot(prereg_data, aes(x=FFD_log)) +
+  geom_histogram(aes(y=after_stat(density)),binwidth=0.05,colour="black") +
+  geom_vline(aes(xintercept=mean(FFD_log,na.rm=TRUE)),colour="red",linewidth=1) +
+  geom_vline(aes(xintercept=mean(FFD_log,na.rm=TRUE)+2.5*sd(FFD_log,na.rm=TRUE)),colour="blue",
+             linetype="dashed",linewidth=1) +
+  geom_vline(aes(xintercept=mean(FFD_log,na.rm=TRUE)-2.5*sd(FFD_log,na.rm=TRUE)),colour="blue",
+             linetype="dashed",linewidth=1) +
+  labs(x="log FFD (ms)", y="Density") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+ggplot(prereg_data, aes(x=FoM_log)) +
+  geom_histogram(aes(y=after_stat(density)),binwidth=0.05,colour="black") +
+  geom_vline(aes(xintercept=mean(FoM_log,na.rm=TRUE)),colour="red",linewidth=1) +
+  geom_vline(aes(xintercept=mean(FoM_log,na.rm=TRUE)+2.5*sd(FoM_log,na.rm=TRUE)),colour="blue",
+             linetype="dashed",linewidth=1) +
+  geom_vline(aes(xintercept=mean(FoM_log,na.rm=TRUE)-2.5*sd(FoM_log,na.rm=TRUE)),colour="blue",
+             linetype="dashed",linewidth=1) +
+  labs(x="log FoM (ms)", y="Density") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+ggplot(prereg_data, aes(x=GD_log)) +
+  geom_histogram(aes(y=after_stat(density)),binwidth=0.05,colour="black") +
+  geom_vline(aes(xintercept=mean(GD_log,na.rm=TRUE)),colour="red",linewidth=1) +
+  geom_vline(aes(xintercept=mean(GD_log,na.rm=TRUE)+2.5*sd(GD_log,na.rm=TRUE)),colour="blue",
+             linetype="dashed",linewidth=1) +
+  geom_vline(aes(xintercept=mean(GD_log,na.rm=TRUE)-2.5*sd(GD_log,na.rm=TRUE)),colour="blue",
+             linetype="dashed",linewidth=1) +
+  labs(x="log GD (ms)", y="Density") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+ggplot(prereg_data, aes(x=GPD_log)) +
+  geom_histogram(aes(y=after_stat(density)),binwidth=0.05,colour="black") +
+  geom_vline(aes(xintercept=mean(GPD_log,na.rm=TRUE)),colour="red",linewidth=1) +
+  geom_vline(aes(xintercept=mean(GPD_log,na.rm=TRUE)+2.5*sd(GPD_log,na.rm=TRUE)),colour="blue",
+             linetype="dashed",linewidth=1) +
+  geom_vline(aes(xintercept=mean(GPD_log,na.rm=TRUE)-2.5*sd(GPD_log,na.rm=TRUE)),colour="blue",
+             linetype="dashed",linewidth=1) +
+  labs(x="log GPD (ms)", y="Density") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour="black"),
+        text = element_text(family="CMU Serif",size=35,colour="black"),
+        legend.background=element_rect(fill=NA));
+
+## ET SD trimming ----
+prereg_data$FFD_trimmed <- prereg_data$FFD_cleanedfixs;
+prereg_data$FFD_trimmed[prereg_data$FFD_trimmed < 
+                                    mean(prereg_data$FFD_cleanedfixs,na.rm=TRUE)-
+                                    2.5*sd(prereg_data$FFD_cleanedfixs,na.rm=TRUE)] <- NA;
+prereg_data$FFD_trimmed <- prereg_data$FFD_cleanedfixs;
+prereg_data$FFD_trimmed[prereg_data$FFD_trimmed > 
+                                    mean(prereg_data$FFD_cleanedfixs,na.rm=TRUE)+
+                                    2.5*sd(prereg_data$FFD_cleanedfixs,na.rm=TRUE)] <- NA;
+
+prereg_data$FoM_trimmed <- prereg_data$FoM_cleanedfixs;
+prereg_data$FoM_trimmed[prereg_data$FoM_trimmed < 
+                                    mean(prereg_data$FoM_cleanedfixs,na.rm=TRUE)-
+                                    2.5*sd(prereg_data$FoM_cleanedfixs,na.rm=TRUE)] <- NA;
+prereg_data$FoM_trimmed <- prereg_data$FoM_cleanedfixs;
+prereg_data$FoM_trimmed[prereg_data$FoM_trimmed > 
+                                    mean(prereg_data$FoM_cleanedfixs,na.rm=TRUE)+
+                                    2.5*sd(prereg_data$FoM_cleanedfixs,na.rm=TRUE)] <- NA;
+
+prereg_data$GD_trimmed <- prereg_data$GD_cleanedfixs;
+prereg_data$GD_trimmed[prereg_data$GD_trimmed < 
+                                    mean(prereg_data$GD_cleanedfixs,na.rm=TRUE)-
+                                    2.5*sd(prereg_data$GD_cleanedfixs,na.rm=TRUE)] <- NA;
+prereg_data$GD_trimmed <- prereg_data$GPD_cleanedfixs;
+prereg_data$GD_trimmed[prereg_data$GD_trimmed > 
+                                    mean(prereg_data$GD_cleanedfixs,na.rm=TRUE)+
+                                    2.5*sd(prereg_data$GD_cleanedfixs,na.rm=TRUE)] <- NA;
+
+prereg_data$GPD_trimmed <- prereg_data$GPD_cleanedfixs;
+prereg_data$GPD_trimmed[prereg_data$GD_trimmed < 
+                                   mean(prereg_data$GPD_cleanedfixs,na.rm=TRUE)-
+                                   2.5*sd(prereg_data$GPD_cleanedfixs,na.rm=TRUE)] <- NA;
+prereg_data$GPD_trimmed <- prereg_data$GPD_cleanedfixs;
+prereg_data$GPD_trimmed[prereg_data$GPD_trimmed > 
+                                   mean(prereg_data$GPD_cleanedfixs,na.rm=TRUE)+
+                                   2.5*sd(prereg_data$GPD_cleanedfixs,na.rm=TRUE)] <- NA;
+
+## log ET SD trimming ----
+prereg_data$FFD_logtrimmed <- prereg_data$FFD_log;
+prereg_data$FFD_logtrimmed[prereg_data$FFD_logtrimmed < 
+                             mean(prereg_data$FFD_log,na.rm=TRUE)-
+                             2.5*sd(prereg_data$FFD_log,na.rm=TRUE)] <- NA;
+prereg_data$FFD_logtrimmed <- prereg_data$FFD_log;
+prereg_data$FFD_logtrimmed[prereg_data$FFD_logtrimmed > 
+                             mean(prereg_data$FFD_log,na.rm=TRUE)+
+                             2.5*sd(prereg_data$FFD_log,na.rm=TRUE)] <- NA;
+
+prereg_data$FoM_logtrimmed <- prereg_data$FoM_log;
+prereg_data$FoM_logtrimmed[prereg_data$FoM_logtrimmed < 
+                             mean(prereg_data$FoM_log,na.rm=TRUE)-
+                             2.5*sd(prereg_data$FoM_log,na.rm=TRUE)] <- NA;
+prereg_data$FoM_logtrimmed <- prereg_data$FoM_log;
+prereg_data$FoM_logtrimmed[prereg_data$FoM_logtrimmed > 
+                             mean(prereg_data$FoM_log,na.rm=TRUE)+
+                             2.5*sd(prereg_data$FoM_log,na.rm=TRUE)] <- NA;
+
+prereg_data$GD_logtrimmed <- prereg_data$GD_log;
+prereg_data$GD_logtrimmed[prereg_data$GD_logtrimmed < 
+                            mean(prereg_data$GD_log,na.rm=TRUE)-
+                            2.5*sd(prereg_data$GD_log,na.rm=TRUE)] <- NA;
+prereg_data$GD_logtrimmed <- prereg_data$GD_log;
+prereg_data$GD_logtrimmed[prereg_data$GD_log > 
+                            mean(prereg_data$GD_log,na.rm=TRUE)+
+                            2.5*sd(prereg_data$GD_log,na.rm=TRUE)] <- NA;
+
+prereg_data$GPD_logtrimmed <- prereg_data$GPD_log;
+prereg_data$GPD_logtrimmed[prereg_data$GD_logtrimmed < 
+                             mean(prereg_data$GPD_log,na.rm=TRUE)-
+                             2.5*sd(prereg_data$GPD_log,na.rm=TRUE)] <- NA;
+prereg_data$GPD_logtrimmed <- prereg_data$GPD_log;
+prereg_data$GPD_logtrimmed[prereg_data$GPD_logtrimmed > 
+                             mean(prereg_data$GPD_log,na.rm=TRUE)+
+                             2.5*sd(prereg_data$GPD_log,na.rm=TRUE)] <- NA;
+
+
+
+
+
+# Correlation of all gaze metrics ----------------------------------------
+cor(all_ETclean[all_ETclean$trial_issue=="N",
+                c("GD_all","FFD_all","GPD_all","FoM_all")],
+    use='pairwise.complete.obs'); # all data
+
+cor(all_ETclean[all_ETclean$trial_issue=="N",
+                c("GD_all","FFD_all","GPD_all","FoM_all")],
+    use='pairwise.complete.obs'); # all data
+
+cor(all_ETclean[all_ETclean$trial_issue=="N",
+                c("GD_noshortfixs","FFD_noshortfixs","GPD_noshortfixs","FoM_noshortfixs")],
+    use='pairwise.complete.obs'); # no short fixs
+
+cor(all_ETclean[all_ETclean$trial_issue=="N",
+                c("GD_nolongfixs","FFD_nolongfixs","GPD_nolongfixs","FoM_nolongfixs")],
+    use='pairwise.complete.obs'); # no long fixs
+
+cor(all_ETclean[all_ETclean$trial_issue=="N",
+                c("GD_cleanedfixs","FFD_cleanedfixs","GPD_cleanedfixs","FoM_cleanedfixs")],
+    use='pairwise.complete.obs'); # cleaned data (no short or long fixs)
+
+cor(all_ET_nopreviews[all_ET_nopreviews$trial_issue=="N",
+                c("GD_cleanedfixs","FFD_cleanedfixs","GPD_cleanedfixs","FoM_cleanedfixs")],
+    use='pairwise.complete.obs'); # without participants having seen previews
+
+cor(all_ET_no20previews[all_ET_no20previews$trial_issue=="N",
+                      c("GD_cleanedfixs","FFD_cleanedfixs","GPD_cleanedfixs","FoM_cleanedfixs")],
+    use='pairwise.complete.obs'); # without participants having seen 20% of previews
+
+cor(all_data_prereg[all_data_prereg$trial_issue=="N",
+                      c("GD_cleanedfixs","FFD_cleanedfixs","GPD_cleanedfixs","FoM_cleanedfixs")],
+    use='pairwise.complete.obs'); # without participants having seen previews
+
+
+
 
 
 # Plotting -------------------------------------------------------------
@@ -286,291 +487,1119 @@ GPD_plt <- ggplot(all_data_nopreviews[all_data_nopreviews$trial_issue=='N',], ae
   scale_x_discrete(labels=c("Identical", "Cognate", "Orthography", "Baseline"));
 ggsave(GPD_plt, filename = "GPD_bycondition.png", bg = "transparent", width=7,height=6);
 
-# Means for each condition ------------------------------------------------
-## FFD ----
-FFD_sID <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
-# 255ms
-FFD_sCG <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
-# 278ms
-FFD_sLN <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
-# 279ms
-FFD_sIN <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 302ms
-FFD_cID <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
-# 257ms
-FFD_cCG <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
-# 268ms
-FFD_cLN <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
-# 277ms
-FFD_cIN <- mean(all_data_nopreviews$FFD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 298ms
-FFDsimple <- c(FFD_sID, FFD_sCG, FFD_sLN, FFD_sIN);
-FFDcomplex <- c(FFD_cID, FFD_cCG, FFD_cLN, FFD_cIN);
-FFD <- data.frame(FFDsimple,FFDcomplex);
-colnames(FFD) <- c("simple","complex");
-rownames(FFD) <- c("ID","CG","LN","IN");
 
-FFD_IDcost <- FFD_sCG - FFD_sID; # 22.64ms
-FFD_complexcost <- mean(c(FFD_cID-FFD_sID,FFD_cIN-FFD_sIN,FFD_cIN-FFD_sIN)); # -2.13ms
-FFD_Sbenefit <- FFD_sCG-FFD_sLN; # -0.89ms
-FFD_Obenefit <- FFD_sLN-FFD_sIN; # -23.48ms
-FFD_Mbenefit <- -(FFD_complexcost - (FFD_cCG-FFD_sCG)); # -7.59ms
-  
-## FoM ----
-FoM_sID <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
-# 243ms
-FoM_sCG <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
-# 260ms
-FoM_sLN <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
-# 252ms
-FoM_sIN <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 274ms
-FoM_cID <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
-# 247ms
-FoM_cCG <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
-# 250ms
-FoM_cLN <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
-# 264ms
-FoM_cIN <- mean(all_data_nopreviews$FoM_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 269ms
-FoMsimple <- c(FoM_sID, FoM_sCG, FoM_sLN, FoM_sIN);
-FoMcomplex <- c(FoM_cID, FoM_cCG, FoM_cLN, FoM_cIN);
-FoM <- data.frame(FoMsimple,FoMcomplex);
-colnames(FoM) <- c("simple","complex");
-rownames(FoM) <- c("ID","CG","LN","IN");
-
-FoM_IDcost <- FoM_sCG - FoM_sID; # 17.05ms
-FoM_complexcost <- mean(c(FoM_cID-FoM_sID,FoM_cIN-FoM_sIN,FoM_cIN-FoM_sIN)); # -1.97ms
-FoM_Sbenefit <- FoM_sCG-FoM_sLN; # 7.86ms
-FoM_Obenefit <- FoM_sLN-FoM_sIN; # -22.04ms
-FoM_Mbenefit <- -(FoM_complexcost - (FoM_cCG-FoM_sCG)); # -7.52ms
-
-## GPD ----
-GPD_sID <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
-# 424ms
-GPD_sCG <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
-# 472ms
-GPD_sLN <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
-# 482ms
-GPD_sIN <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 599ms
-GPD_cID <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
-# 453ms
-GPD_cCG <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
-# 504ms
-GPD_cLN <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
-# 520ms
-GPD_cIN <- mean(all_data_nopreviews$GPD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 614ms
-GPDsimple <- c(GPD_sID, GPD_sCG, GPD_sLN, GPD_sIN);
-GPDcomplex <- c(GPD_cID, GPD_cCG, GPD_cLN, GPD_cIN);
-GPD <- data.frame(GPDsimple,GPDcomplex);
-colnames(GPD) <- c("simple","complex");
-rownames(GPD) <- c("ID","CG","LN","IN");
-
-GPD_IDcost <- GPD_sCG - GPD_sID; # 48.87ms
-GPD_complexcost <- mean(c(GPD_cID-GPD_sID,GPD_cIN-GPD_sIN,GPD_cIN-GPD_sIN)); # 19.88ms
-GPD_Sbenefit <- GPD_sCG-GPD_sLN; # -9.31ms
-GPD_Obenefit <- GPD_sLN-GPD_sIN; # -117.01ms
-GPD_Mbenefit <- -(GPD_complexcost - (GPD_cCG-GPD_sCG)); # 11.70ms
-
-## GD ----
-GD_sID <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
-# 343ms
-GD_sCG <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
-# 372ms
-GD_sLN <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
-# 379ms
-GD_sIN <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='simple'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 401ms
-GD_cID <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='identical'],na.rm=TRUE);
-# 408ms
-GD_cCG <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='cognate'],na.rm=TRUE);
-# 411ms
-GD_cLN <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='legal_nonword'],na.rm=TRUE);
-# 422ms
-GD_cIN <- mean(all_data_nopreviews$GD_cleanedfixs[all_data_nopreviews$trial_issue=='N'&all_data_nopreviews$morph_type=='complex'&all_data_nopreviews$trial_type=='illegal_nonword'],na.rm=TRUE);
-# 453ms
-GDsimple <- c(GD_sID, GD_sCG, GD_sLN, GD_sIN);
-GDcomplex <- c(GD_cID, GD_cCG, GD_cLN, GD_cIN);
-GD <- data.frame(GDsimple,GDcomplex);
-colnames(GD) <- c("simple","complex");
-rownames(GD) <- c("ID","CG","LN","IN");
-
-GD_IDcost <- GD_sCG - GD_sID; # 28.47ms
-GD_complexcost <- mean(c(GD_cID-GD_sID,GD_cIN-GD_sIN,GD_cIN-GD_sIN)); # 56.19ms
-GD_Sbenefit <- GD_sCG-GD_sLN; # -7.11ms
-GD_Obenefit <- GD_sLN-GD_sIN; # -22.64ms
-GD_Mbenefit <- -(GD_complexcost - (GD_cCG-GD_sCG)); # -16.84ms
-
-## All costs/benefits together ----
-FFD_costs <- c(FFD_IDcost,FFD_complexcost,FFD_Obenefit,FFD_Sbenefit,FFD_Mbenefit);
-FoM_costs <- c(FoM_IDcost,FoM_complexcost,FoM_Obenefit,FoM_Sbenefit,FoM_Mbenefit);
-GPD_costs <- c(GPD_IDcost,GPD_complexcost,GPD_Obenefit,GPD_Sbenefit,GPD_Mbenefit);
-GD_costs <- c(GD_IDcost,GD_complexcost,GD_Obenefit,GD_Sbenefit,GD_Mbenefit);
-label_costs <- c("Identical cost","Complex cost","Orthography benefit",
-                  "Semantics benefit","Morphology benefit");
-all_costs <- data.frame(label_costs,FFD_costs,FoM_costs,GPD_costs,GD_costs);
-rownames(all_costs) <- c("ID_cost","complex_cost","Obenefit","Sbenefit","Mbenefit");
-colnames(all_costs) <- c("type","FFD","FoM","GPD","GD");
-all_costs$type <- factor(all_costs$type, levels=unique(all_costs$type));
-
-FFD_costs <- ggplot(all_costs, aes(x=type, y=FFD)) +
-  geom_bar(stat="identity",fill=green_col) +
-  geom_hline(yintercept=0) +
-  labs(y = "FFD (ms)") +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.title.x = element_blank(),
-        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
-        text=element_text(family="CMU Serif",size=40),
-        rect = element_rect(fill="transparent"));
-ggsave(FFD_costs, filename = "FFD_costs.png", bg = "transparent", width=7,height=6);
-
-FoM_costs <- ggplot(all_costs, aes(x=type, y=FoM)) +
-  geom_bar(stat="identity",fill=green_col) +
-  geom_hline(yintercept=0) +
-  labs(y = "FoM (ms)") +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.title.x = element_blank(),
-        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
-        text=element_text(family="CMU Serif",size=40),
-        rect = element_rect(fill="transparent"));
-ggsave(FoM_costs, filename = "FoM_costs.png", bg = "transparent", width=7,height=6);
-
-GPD_costs <- ggplot(all_costs, aes(x=type, y=GPD)) +
-  geom_bar(stat="identity",fill=green_col) +
-  geom_hline(yintercept=0) +
-  labs(y = "GPD (ms)") +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.title.x = element_blank(),
-        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
-        text=element_text(family="CMU Serif",size=40),
-        rect = element_rect(fill="transparent"));
-ggsave(GPD_costs, filename = "GPD_costs.png", bg = "transparent", width=7,height=6);
-
-GD_costs <- ggplot(all_costs, aes(x=type, y=GD)) +
-  geom_bar(stat="identity",fill=green_col) +
-  geom_hline(yintercept=0) +
-  labs(y = "GD (ms)") +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        panel.background = element_blank(), axis.line = element_line(colour = "black"),
-        axis.title.x = element_blank(),
-        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
-        text=element_text(family="CMU Serif",size=40),
-        rect = element_rect(fill="transparent"));
-ggsave(GD_costs, filename = "GD_costs.png", bg = "transparent", width=7,height=6);
 
 
 # LMERS ------------------------------------------------------------------
 # contrast coding
-all_data <- all_data %>% 
+prereg_data <- prereg_data %>% 
   mutate(morph_coded = case_when(morph_type == 'simple' ~ -0.5,
-                                 morph_type == 'complex' ~ 0.5))
+                                 morph_type == 'complex' ~ 0.5));
 
 emm_options(lmerTest.limit = 12150, pbkrtest.limit = 12150,
             lmer.df="satterthwaite");
 
-# all data
-lm_FFD_all <- lmer(FFD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_FFD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FFD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
 
-lm_FoM_all <- lmer(FoM_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_FoM_all, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FoM_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+## PRE-REGISTRATION -----
+lm_FFD_prereg <- lmer(FFD_cleanedfixs ~ scale(trial_id) + 
+                              target_length + target_zipf + 
+                              morph_score + lextale_score + changes_seen + 
+                              morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                            data=prereg_data);
+summary(emmeans(lm_FFD_prereg, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_FFD_prereg, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_prereg);
+fitted_values <- fitted(lm_FFD_prereg);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_prereg); # R2m = 0.05, R2c = 0.15
 
-lm_GD_all <- lmer(GD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_GD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+lm_FoM_prereg <- lmer(FoM_cleanedfixs ~ scale(trial_id) + 
+                              target_length + target_zipf + 
+                              morph_score + lextale_score + changes_seen + 
+                              morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                            data=prereg_data);
+summary(emmeans(lm_FoM_prereg, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_FoM_prereg, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_prereg);
+fitted_values <- fitted(lm_FoM_prereg);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_prereg); # R2m = 0.05, R2c = 0.14
 
-lm_GPD_all <- lmer(GPD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_GPD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GPD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+lm_GD_prereg <- lmer(GD_cleanedfixs ~ scale(trial_id) + 
+                             target_length + target_zipf +
+                             morph_score + lextale_score + changes_seen + 
+                             morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                           data=prereg_data);
+summary(emmeans(lm_GD_prereg, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_GD_prereg, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_prereg);
+fitted_values <- fitted(lm_GD_prereg);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_prereg); # R2m = 0.14, R2c = 0.34
 
-# all data without long GPDs
-lm_FFD_nolongGPDs <- lmer(FFD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N',]);
-summary(emmeans(lm_FFD_nolongGPDs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FFD_nolongGPDs, pairwise~trial_type|morph_type), adjust="bonferroni");
+lm_GPD_prereg <- lmer(GPD_cleanedfixs ~ scale(trial_id) + 
+                              target_length + target_zipf + 
+                              morph_score + lextale_score + changes_seen + 
+                              morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                            data=prereg_data);
+summary(emmeans(lm_GPD_prereg, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_GPD_prereg, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_prereg);
+fitted_values <- fitted(lm_GPD_prereg);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # slightly heteroscedastic?
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # still some heavy tailing at upper bound
+# R2
+r.squaredGLMM(lm_GPD_prereg); # R2m = 0.10, R2c = 0.23
 
-lm_FoM_nolongGPDs <- lmer(FoM_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N',]);
-summary(emmeans(lm_FoM_nolongGPDs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FoM_nolongGPDs, pairwise~trial_type|morph_type), adjust="bonferroni");
+lm_skip_prereg <- lme4::glmer(skip ~ scale(trial_id) + 
+                        target_length + target_zipf + 
+                        morph_score + lextale_score + changes_seen + 
+                        morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                      data=all_data_no20previews[all_data_no20previews$trial_issue=='N'|all_data_no20previews$trial_issue=='T_SKIP',],
+                      family='binomial');
+# Error: Response is constant
 
-lm_GD_nolongGPDs <- lmer(GD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N',]);
-summary(emmeans(lm_GD_nolongGPDs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GD_nolongGPDs, pairwise~trial_type|morph_type), adjust="bonferroni");
 
-lm_GPD_nolongGPDs <- lmer(GPD_all ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N',]);
-summary(emmeans(lm_GPD_nolongGPDs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GPD_nolongGPDs, pairwise~trial_type|morph_type), adjust="bonferroni");
 
-# all data without short fixations
-lm_FFD_noshortfixs <- lmer(FFD_noshortfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_FFD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FFD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
 
-lm_FoM_noshortfixs <- lmer(FoM_noshortfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_FoM_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FoM_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
 
-lm_GD_noshortfixs <- lmer(GD_noshortfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_GD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-lm_GPD_noshortfixs <- lmer(GPD_noshortfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_GPD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GPD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-# all data without long fixations
-lm_FFD_nolongfixs <- lmer(FFD_nolongfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_FFD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FFD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-lm_FoM_nolongfixs <- lmer(FoM_nolongfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_FoM_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FoM_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-lm_GD_nolongfixs <- lmer(GD_nolongfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_GD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-lm_GPD_nolongfixs <- lmer(GPD_nolongfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data[all_data$trial_issue=='N'|all_data$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_GPD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GPD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-# all data without short or long fixations
-lm_FFD_cleanedfixs <- lmer(FFD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_clean[all_data_clean$trial_issue=='N'|all_data_clean$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_FFD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FFD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-lm_FoM_cleanedfixs <- lmer(FoM_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_clean[all_data_clean$trial_issue=='N'|all_data_clean$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_FoM_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_FoM_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-lm_GD_cleanedfixs <- lmer(GD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_clean[all_data_clean$trial_issue=='N'|all_data_clean$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_GD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-lm_GPD_cleanedfixs <- lmer(GPD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_clean[all_data_clean$trial_issue=='N'|all_data_clean$trial_issue=='LONG_GPD',]);
-summary(emmeans(lm_GPD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GPD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
-
-# all data without participants having seen previews
-lm_FFD_nopreviews <- lmer(FFD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N'|all_data_nopreviews$trial_issue=='LONG_GPD',]);
+## no participants having seen previews ----
+lm_FFD_nopreviews <- lmer(FFD_cleanedfixs ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N',]);
 summary(emmeans(lm_FFD_nopreviews, pairwise~morph_type|trial_type), adjust="bonferroni");
 summary(emmeans(lm_FFD_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_nopreviews);
+fitted_values <- fitted(lm_FFD_nopreviews);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_nopreviews); # R2m = 0.05, R2c = 0.16
 
-lm_FoM_nopreviews <- lmer(FoM_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N'|all_data_nopreviews$trial_issue=='LONG_GPD',]);
+lm_FoM_nopreviews <- lmer(FoM_cleanedfixs ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N',]);
 summary(emmeans(lm_FoM_nopreviews, pairwise~morph_type|trial_type), adjust="bonferroni");
 summary(emmeans(lm_FoM_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_nopreviews);
+fitted_values <- fitted(lm_FoM_nopreviews);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_nopreviews); # R2m = 0.05, R2c = 0.17
 
-lm_GD_nopreviews <- lmer(GD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N'|all_data_nopreviews$trial_issue=='LONG_GPD',]);
+lm_GD_nopreviews <- lmer(GD_cleanedfixs ~ scale(trial_id) + 
+                           target_length + target_zipf +
+                           morph_score + lextale_score + changes_seen + 
+                           morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                         data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N',]);
 summary(emmeans(lm_GD_nopreviews, pairwise~morph_type|trial_type), adjust="bonferroni");
 summary(emmeans(lm_GD_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_nopreviews);
+fitted_values <- fitted(lm_GD_nopreviews);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_nopreviews); # R2m = 0.14, R2c = 0.35
 
-lm_GPD_nopreviews <- lmer(GPD_cleanedfixs ~ scale(trial_id) + cognate_LD + nonword_LD + target_length + target_fpmw + target_zipf + cognate_length + cognate_fpmw + cognate_zipf + morph_score + lextale_score + changes_seen + morph_type*trial_type + (1|sbj_ID) + (1|target), data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N'|all_data_nopreviews$trial_issue=='LONG_GPD',]);
+lm_GPD_nopreviews <- lmer(GPD_cleanedfixs ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_nopreviews[all_data_nopreviews$trial_issue=='N',]);
 summary(emmeans(lm_GPD_nopreviews, pairwise~morph_type|trial_type), adjust="bonferroni");
-summary(emmeans(lm_GPD_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni")
+summary(emmeans(lm_GPD_nopreviews, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_nopreviews);
+fitted_values <- fitted(lm_GPD_nopreviews);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # slightly heteroscedastic?
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # still some heavy tailing at upper bound
+# R2
+r.squaredGLMM(lm_GPD_nopreviews); # R2m = 0.10, R2c = 0.23
+
+
+## Log-transformed data ----
+lm_FFD_log <- lmer(FFD_log ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                   data=prereg_data);
+summary(emmeans(lm_FFD_log, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_FFD_log, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_log);
+fitted_values <- fitted(lm_FFD_log);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_log); # R2m = 0.05, R2c = 0.15
+
+lm_FoM_log <- lmer(FoM_log ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                   data=prereg_data);
+summary(emmeans(lm_FoM_log, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_FoM_log, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_log);
+fitted_values <- fitted(lm_FoM_log);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_log); # R2m = 0.05, R2c = 0.14
+
+lm_GD_log <- lmer(GD_log ~ scale(trial_id) + 
+                    target_length + target_zipf +
+                    morph_score + lextale_score + changes_seen + 
+                    morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                  data=prereg_data);
+summary(emmeans(lm_GD_log, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_GD_log, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_log);
+fitted_values <- fitted(lm_GD_log);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_log); # R2m = 0.14, R2c = 0.34
+
+lm_GPD_log <- lmer(GPD_log ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                   data=prereg_data);
+summary(emmeans(lm_GPD_log, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_GPD_log, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_log);
+fitted_values <- fitted(lm_GPD_log);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # slightly heteroscedastic?
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # still some heavy tailing at upper bound
+# R2
+r.squaredGLMM(lm_GPD_log); # R2m = 0.10, R2c = 0.23
+
+
+## Trimmed Log-transformed data ----
+lm_FFD_logtrimmed <- lmer(FFD_logtrimmed ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                   data=prereg_data);
+summary(emmeans(lm_FFD_logtrimmed, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_FFD_logtrimmed, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_logtrimmed);
+fitted_values <- fitted(lm_FFD_logtrimmed);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_logtrimmed); # R2m = 0.05, R2c = 0.15
+
+lm_FoM_logtrimmed <- lmer(FoM_logtrimmed ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                   data=prereg_data);
+summary(emmeans(lm_FoM_logtrimmed, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_FoM_logtrimmed, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_logtrimmed);
+fitted_values <- fitted(lm_FoM_logtrimmed);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_logtrimmed); # R2m = 0.05, R2c = 0.14
+
+lm_GD_logtrimmed <- lmer(GD_logtrimmed ~ scale(trial_id) + 
+                    target_length + target_zipf +
+                    morph_score + lextale_score + changes_seen + 
+                    morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                  data=prereg_data);
+summary(emmeans(lm_GD_logtrimmed, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_GD_logtrimmed, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_logtrimmed);
+fitted_values <- fitted(lm_GD_logtrimmed);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_logtrimmed); # R2m = 0.14, R2c = 0.34
+
+lm_GPD_logtrimmed <- lmer(GPD_logtrimmed ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                   data=prereg_data);
+summary(emmeans(lm_GPD_logtrimmed, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_GPD_logtrimmed, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_logtrimmed);
+fitted_values <- fitted(lm_GPD_logtrimmed);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # slightly heteroscedastic?
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # still some heavy tailing at upper bound
+# R2
+r.squaredGLMM(lm_GPD_logtrimmed); # R2m = 0.10, R2c = 0.23
+
+
+
+## Trimmed Log-transformed data ----
+lm_FFD_logtrimmed2 <- lmer(FFD_logtrimmed ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                          data=prereg_data, 
+                          subset=abs(scale(resid(lm_FFD_logtrimmed))) < 2.5);
+summary(emmeans(lm_FFD_logtrimmed2, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_FFD_logtrimmed2, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_logtrimmed2);
+fitted_values <- fitted(lm_FFD_logtrimmed2);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_logtrimmed2); # R2m = 0.05, R2c = 0.15
+
+lm_FoM_logtrimmed2 <- lmer(FoM_logtrimmed ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                          data=prereg_data,
+                          subset=abs(scale(resid(lm_FoM_logtrimmed))) < 2.5);
+summary(emmeans(lm_FoM_logtrimmed2, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_FoM_logtrimmed2, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_logtrimmed2);
+fitted_values <- fitted(lm_FoM_logtrimmed2);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_logtrimmed2); # R2m = 0.05, R2c = 0.14
+
+lm_GD_logtrimmed2 <- lmer(GD_logtrimmed ~ scale(trial_id) + 
+                           target_length + target_zipf +
+                           morph_score + lextale_score + changes_seen + 
+                           morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                         data=prereg_data,
+                         subset=abs(scale(resid(lm_GD_logtrimmed))) < 2.5);
+summary(emmeans(lm_GD_logtrimmed2, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_GD_logtrimmed2, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_logtrimmed2);
+fitted_values <- fitted(lm_GD_logtrimmed2);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_logtrimmed2); # R2m = 0.14, R2c = 0.34
+
+lm_GPD_logtrimmed2 <- lmer(GPD_logtrimmed ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_coded*trial_type_cod + (1|sbj_ID) + (1|target), 
+                          data=prereg_data,
+                          subset=abs(scale(resid(lm_GPD_logtrimmed))) < 2.5);
+summary(emmeans(lm_GPD_logtrimmed2, pairwise~morph_coded|trial_type_cod), adjust="bonferroni");
+summary(emmeans(lm_GPD_logtrimmed2, pairwise~trial_type_cod|morph_coded), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_logtrimmed2);
+fitted_values <- fitted(lm_GPD_logtrimmed2);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # slightly heteroscedastic?
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # still some heavy tailing at upper bound
+# R2
+r.squaredGLMM(lm_GPD_logtrimmed2); # R2m = 0.10, R2c = 0.23
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Pre-reg excluding outliers -----
+lm_FFD_trimmed <- lmer(FFD_trimmed ~ scale(trial_id) + 
+                        target_length + target_zipf + 
+                        morph_score + lextale_score + changes_seen + 
+                        morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                      data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_FFD_trimmed, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_trimmed, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_trimmed);
+fitted_values <- fitted(lm_FFD_trimmed);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_trimmed); # R2m = 0.05, R2c = 0.15
+
+lm_FoM_trimmed <- lmer(FoM_trimmed ~ scale(trial_id) + 
+                        target_length + target_zipf + 
+                        morph_score + lextale_score + changes_seen + 
+                        morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                      data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_FoM_trimmed, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_trimmed, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_trimmed);
+fitted_values <- fitted(lm_FoM_trimmed);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_trimmed); # R2m = 0.05, R2c = 0.14
+
+lm_GD_trimmed <- lmer(GD_trimmed ~ scale(trial_id) + 
+                       target_length + target_zipf +
+                       morph_score + lextale_score + changes_seen + 
+                       morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                     data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_GD_trimmed, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_trimmed, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_trimmed);
+fitted_values <- fitted(lm_GD_trimmed);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_trimmed); # R2m = 0.14, R2c = 0.34
+
+lm_GPD_trimmed <- lmer(GPD_trimmed ~ scale(trial_id) + 
+                        target_length + target_zipf + 
+                        morph_score + lextale_score + changes_seen + 
+                        morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                      data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_GPD_trimmed, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_trimmed, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_trimmed);
+fitted_values <- fitted(lm_GPD_trimmed);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # slightly heteroscedastic?
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # still some heavy tailing at upper bound
+# R2
+r.squaredGLMM(lm_GPD_trimmed); # R2m = 0.10, R2c = 0.23
+
+
+## all participants (except sbj 58)
+lm_FFD_cleanedfixs <- lmer(FFD_cleanedfixs ~ scale(trial_id) + 
+                             target_length + target_zipf + 
+                             morph_score + lextale_score + changes_seen + 
+                             morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                           data=all_data_clean[all_data_clean$trial_issue=='N',]);
+summary(emmeans(lm_FFD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_cleanedfixs);
+fitted_values <- fitted(lm_FFD_cleanedfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_cleanedfixs); # R2m = 0.04, R2c = 0.18
+
+lm_FoM_cleanedfixs <- lmer(FoM_cleanedfixs ~ scale(trial_id) + 
+                             target_length + target_zipf + 
+                             morph_score + lextale_score + changes_seen + 
+                             morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                           data=all_data_clean[all_data_clean$trial_issue=='N',]);
+summary(emmeans(lm_FoM_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_cleanedfixs);
+fitted_values <- fitted(lm_FoM_cleanedfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_cleanedfixs); # R2m = 0.04, R2c = 0.16
+
+lm_GD_cleanedfixs <- lmer(GD_cleanedfixs ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_clean[all_data_clean$trial_issue=='N',]);
+summary(emmeans(lm_GD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_cleanedfixs);
+fitted_values <- fitted(lm_GD_cleanedfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_cleanedfixs); # R2m = 0.12, R2c = 0.34
+
+lm_GPD_cleanedfixs <- lmer(GPD_cleanedfixs ~ scale(trial_id) + 
+                             target_length + target_zipf + 
+                             morph_score + lextale_score + changes_seen + 
+                             morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                           data=all_data_clean[all_data_clean$trial_issue=='N',]);
+summary(emmeans(lm_GPD_cleanedfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_cleanedfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_cleanedfixs);
+fitted_values <- fitted(lm_GPD_cleanedfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # unbalanced Y axis
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # heavy-tailed at upper bound
+# R2
+r.squaredGLMM(lm_GPD_cleanedfixs); # R2m = 0.09, R2c = 0.23
+
+
+
+## without FFDs over 800ms -----
+lm_FFD_nolongFFDs <- lmer(FFD_noover800 ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_FFD_nolongFFDs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_nolongFFDs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_nolongFFDs);
+fitted_values <- fitted(lm_FFD_nolongFFDs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_nolongFFDs); # R2m = 0.04, R2c = 0.17
+
+
+
+## without long fixations ----
+lm_FFD_nolongfixs <- lmer(FFD_nolongfixs ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_FFD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_nolongfixs);
+fitted_values <- fitted(lm_FFD_nolongfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_nolongfixs); # R2m = 0.04, R2c = 0.17
+
+lm_FoM_nolongfixs <- lmer(FoM_nolongfixs ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_FoM_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_nolongfixs);
+fitted_values <- fitted(lm_FoM_nolongfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_nolongfixs); # R2m = 0.04, R2c = 0.15
+
+lm_GD_nolongfixs <- lmer(GD_nolongfixs ~ scale(trial_id) + 
+                           target_length + target_zipf + 
+                           morph_score + lextale_score + changes_seen + 
+                           morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                         data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_GD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_nolongfixs);
+fitted_values <- fitted(lm_GD_nolongfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_nolongfixs); # R2m = 0.12, R2c = 0.32
+
+lm_GPD_nolongfixs <- lmer(GPD_nolongfixs ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_GPD_nolongfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_nolongfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_nolongfixs);
+fitted_values <- fitted(lm_GPD_nolongfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # unbalanced Y axis
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # heavy-tailed at higher bound
+# R2
+r.squaredGLMM(lm_GPD_nolongfixs); # R2m = 0.10, R2c = 0.26
+
+
+## without short fixations ----
+lm_FFD_noshortfixs <- lmer(FFD_noshortfixs ~ scale(trial_id) + 
+                             target_length + target_zipf + 
+                             morph_score + lextale_score + changes_seen + 
+                             morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                           data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_FFD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_noshortfixs);
+fitted_values <- fitted(lm_FFD_noshortfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_noshortfixs); # R2m = 0.04, R2c = 0.17
+
+lm_FoM_noshortfixs <- lmer(FoM_noshortfixs ~ scale(trial_id) + 
+                             target_length + target_zipf + 
+                             morph_score + lextale_score + changes_seen + 
+                             morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                           data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_FoM_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_noshortfixs);
+fitted_values <- fitted(lm_FoM_noshortfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_noshortfixs); # R2m = 0.03, R2c = 0.16
+
+lm_GD_noshortfixs <- lmer(GD_noshortfixs ~ scale(trial_id) + 
+                            target_length + target_zipf + 
+                            morph_score + lextale_score + changes_seen + 
+                            morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                          data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_GD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_noshortfixs);
+fitted_values <- fitted(lm_GD_noshortfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_noshortfixs); # R2m = 0.11, R2c = 0.32
+
+lm_GPD_noshortfixs <- lmer(GPD_noshortfixs ~ scale(trial_id) + 
+                             target_length + target_zipf + 
+                             morph_score + lextale_score + changes_seen + 
+                             morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                           data=all_data_no20previews[all_data_no20previews$trial_issue=='N',]);
+summary(emmeans(lm_GPD_noshortfixs, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_noshortfixs, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_noshortfixs);
+fitted_values <- fitted(lm_GPD_noshortfixs);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # unbalanced Y axis
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # heavy-tailed at upper bound
+# R2
+r.squaredGLMM(lm_GPD_noshortfixs); # R2m = 0.07, R2c = 0.18
+
+
+
+## all data -----
+lm_FFD_all <- lmer(FFD_all ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                   data=all_data[all_data$trial_issue=='N',]);
+summary(emmeans(lm_FFD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FFD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FFD_all);
+fitted_values <- fitted(lm_FFD_all);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FFD_all); # R2m = 0.04, R2c = 0.17
+
+lm_FoM_all <- lmer(FoM_all ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                   data=all_data[all_data$trial_issue=='N',]);
+summary(emmeans(lm_FoM_all, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_FoM_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_FoM_all);
+fitted_values <- fitted(lm_FoM_all);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_FoM_all); # R2m = 0.03, R2c = 0.15
+
+lm_GD_all <- lmer(GD_all ~ scale(trial_id) + 
+                    target_length + target_zipf + 
+                    morph_score + lextale_score + changes_seen + 
+                    morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                  data=all_data[all_data$trial_issue=='N',]);
+summary(emmeans(lm_GD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GD_all);
+fitted_values <- fitted(lm_GD_all);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # pretty good, some outliers at higher end
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # curve at upper end
+# R2
+r.squaredGLMM(lm_GD_all); # R2m = 0.11, R2c = 0.32
+
+lm_GPD_all <- lmer(GPD_all ~ scale(trial_id) + 
+                     target_length + target_zipf + 
+                     morph_score + lextale_score + changes_seen + 
+                     morph_type*trial_type + (1|sbj_ID) + (1|target), 
+                   data=all_data[all_data$trial_issue=='N',]);
+summary(emmeans(lm_GPD_all, pairwise~morph_type|trial_type), adjust="bonferroni");
+summary(emmeans(lm_GPD_all, pairwise~trial_type|morph_type), adjust="bonferroni");
+# Residuals & fitted values
+residuals <- residuals(lm_GPD_all);
+fitted_values <- fitted(lm_GPD_all);
+plot(fitted_values, residuals, 
+     main = "Residuals vs Fitted Values",
+     xlab = "Fitted Values",
+     ylab = "Residuals");
+abline(h = 0, col = "red", lty = 2); # unbalanced Y axis
+# QQ Plot
+qqnorm(residuals);
+qqline(residuals, col = "red"); # heavy tail at upper bound
+# R2
+r.squaredGLMM(lm_GPD_all); # R2m = 0.07, R2c = 0.19
+
+
+
+
+
+
+# Effects plots --------------------------------------------------------------
+## Pre-registration ----
+ef_lm_FFD_prereg <- data.frame(effect(c("morph_type*trial_type"),lm_FFD_prereg));
+ggplot(ef_lm_FFD_prereg, aes(x=trial_type,y=fit,group=morph_type)) +
+  geom_line(aes(colour=morph_type,linetype=morph_type),linewidth=1,position=position_dodge(width=0.2)) +
+  geom_point(aes(colour=morph_type,shape=morph_type),size=3,position=position_dodge(width=0.2)) +
+  geom_errorbar(aes(ymin=lower, ymax=upper, color=morph_type),width=0.2,position=position_dodge(width=0.2)) +
+  
+  labs(x="Preview type",y="FFD (ms)") +
+  scale_x_discrete(labels=c("Identical","Cognate","Legal nonword","Illegal nonword")) +
+  scale_linetype_manual(values=c("dashed", "solid"),name="Morphological type") +
+  scale_colour_manual(values=c("#1a8de5", "#859a2f"),name="Morphological type") +
+  scale_shape_manual(values=c(16,17),name="Morphological type") +
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
+        text=element_text(family="CMU Serif",size=20),
+        legend.position=c(0.2,0.8),legend.background=element_rect(fill=NA));
+
+ef_lm_FoM_prereg <- data.frame(effect(c("morph_type*trial_type"),lm_FoM_prereg));
+ggplot(ef_lm_FoM_prereg, aes(x=trial_type,y=fit,group=morph_type)) +
+  geom_line(aes(colour=morph_type,linetype=morph_type),linewidth=1,position=position_dodge(width=0.2)) +
+  geom_point(aes(colour=morph_type,shape=morph_type),size=3,position=position_dodge(width=0.2)) +
+  geom_errorbar(aes(ymin=lower, ymax=upper, color=morph_type),width=0.2,position=position_dodge(width=0.2)) +
+  
+  labs(x="Preview type",y="FoM (ms)") +
+  scale_x_discrete(labels=c("Identical","Cognate","Legal nonword","Illegal nonword")) +
+  scale_linetype_manual(values=c("dashed", "solid"),name="Morphological type") +
+  scale_colour_manual(values=c("#1a8de5", "#859a2f"),name="Morphological type") +
+  scale_shape_manual(values=c(16,17),name="Morphological type") +
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
+        text=element_text(family="CMU Serif",size=20),
+        legend.position=c(0.2,0.8),legend.background=element_rect(fill=NA));
+
+ef_lm_GD_prereg <- data.frame(effect(c("morph_type*trial_type"),lm_GD_prereg));
+ggplot(ef_lm_GD_prereg, aes(x=trial_type,y=fit,group=morph_type)) +
+  geom_line(aes(colour=morph_type,linetype=morph_type),linewidth=1,position=position_dodge(width=0.2)) +
+  geom_point(aes(colour=morph_type,shape=morph_type),size=3,position=position_dodge(width=0.2)) +
+  geom_errorbar(aes(ymin=lower, ymax=upper, color=morph_type),width=0.2,position=position_dodge(width=0.2)) +
+  
+  labs(x="Preview type",y="GD (ms)") +
+  scale_x_discrete(labels=c("Identical","Cognate","Legal nonword","Illegal nonword")) +
+  scale_linetype_manual(values=c("dashed", "solid"),name="Morphological type") +
+  scale_colour_manual(values=c("#1a8de5", "#859a2f"),name="Morphological type") +
+  scale_shape_manual(values=c(16,17),name="Morphological type") +
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
+        text=element_text(family="CMU Serif",size=20),
+        legend.position=c(0.2,0.8),legend.background=element_rect(fill=NA));
+
+ef_lm_GPD_prereg <- data.frame(effect(c("morph_type*trial_type"),lm_GPD_prereg));
+ggplot(ef_lm_GPD_prereg, aes(x=trial_type,y=fit,group=morph_type)) +
+  geom_line(aes(colour=morph_type,linetype=morph_type),linewidth=1,position=position_dodge(width=0.2)) +
+  geom_point(aes(colour=morph_type,shape=morph_type),size=3,position=position_dodge(width=0.2)) +
+  geom_errorbar(aes(ymin=lower, ymax=upper, color=morph_type),width=0.2,position=position_dodge(width=0.2)) +
+  
+  labs(x="Preview type",y="GPD (ms)") +
+  scale_x_discrete(labels=c("Identical","Cognate","Legal nonword","Illegal nonword")) +
+  scale_linetype_manual(values=c("dashed", "solid"),name="Morphological type") +
+  scale_colour_manual(values=c("#1a8de5", "#859a2f"),name="Morphological type") +
+  scale_shape_manual(values=c(16,17),name="Morphological type") +
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 20, colour = "black"),
+        text=element_text(family="CMU Serif",size=20),
+        legend.position=c(0.2,0.8),legend.background=element_rect(fill=NA));
+
+
+## Pre-registration (log-transformed) ----
+ef_lm_FFD_log <- effect(c("morph_coded*trial_type_cod"),lm_FFD_log);
+ef_lm_FFD_log <- data.frame(ef_lm_FFD_log);
+ef_lm_FFD_log <- ef_lm_FFD_log[ef_lm_FFD_log$morph_coded==-0.5|ef_lm_FFD_log$morph_coded==0.5,];
+ef_lm_FFD_log$morph_type <- ef_lm_FFD_log$morph_coded;
+ef_lm_FFD_log$morph_type[ef_lm_FFD_log$morph_type==-0.5] <- "simple";
+ef_lm_FFD_log$morph_type[ef_lm_FFD_log$morph_type==0.5] <- "complex";
+ef_lm_FFD_log$morph_type <- factor(ef_lm_FFD_log$morph_type, levels=c("simple","complex"));
+
+FFD_log_plt <- ggplot(ef_lm_FFD_log, aes(y=exp(fit), x=trial_type_cod, group=morph_type)) +
+  geom_line(aes(color=morph_type, linetype=morph_type), linewidth=1, position=position_dodge(width=0.2)) +
+  geom_point(aes(color=morph_type, shape=morph_type), size=3, position=position_dodge(width=0.2)) +
+  geom_errorbar(aes(ymin=exp(lower), ymax=exp(upper), color=morph_type), width=0.2, position=position_dodge(width=0.2)) +
+  
+  labs(x="Preview type",y="FFD (ms)") +
+  scale_x_discrete(labels=c("Identical","Cognate","Legal nonword","Illegal nonword")) +
+  scale_linetype_manual(values=c("dashed", "solid"),name="Morphological type") +
+  scale_colour_manual(values=c("#859a2f","#1a8de5"),name="Morphological type") +
+  scale_shape_manual(values=c(16,17),name="Morphological type") +
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 60, colour = "black"),
+        text=element_text(family="CMU Serif",size=60),
+        legend.position=c(0.2,0.8),legend.background=element_rect(fill=NA));
+ggsave("FFD_log_effects.png",width=10,height=7,FFD_log_plt,device="png");
+
+ef_lm_FoM_log <- effect(c("morph_coded*trial_type_cod"),lm_FoM_log);
+ef_lm_FoM_log <- data.frame(ef_lm_FoM_log);
+ef_lm_FoM_log <- ef_lm_FoM_log[ef_lm_FoM_log$morph_coded==-0.5|ef_lm_FoM_log$morph_coded==0.5,];
+ef_lm_FoM_log$morph_type <- ef_lm_FoM_log$morph_coded;
+ef_lm_FoM_log$morph_type[ef_lm_FoM_log$morph_type==-0.5] <- "simple";
+ef_lm_FoM_log$morph_type[ef_lm_FoM_log$morph_type==0.5] <- "complex";
+ef_lm_FoM_log$morph_type <- factor(ef_lm_FoM_log$morph_type, levels=c("simple","complex"));
+
+FoM_log_plt <- ggplot(ef_lm_FoM_log, aes(y=exp(fit), x=trial_type_cod, group=morph_type)) +
+  geom_line(aes(color=morph_type, linetype=morph_type), linewidth=1, position=position_dodge(width=0.2)) +
+  geom_point(aes(color=morph_type, shape=morph_type), size=3, position=position_dodge(width=0.2)) +
+  geom_errorbar(aes(ymin=exp(lower), ymax=exp(upper), color=morph_type), width=0.2, position=position_dodge(width=0.2)) +
+  
+  labs(x="Preview type",y="FoM (ms)") +
+  scale_x_discrete(labels=c("Identical","Cognate","Legal nonword","Illegal nonword")) +
+  scale_linetype_manual(values=c("dashed", "solid"),name="Morphological type") +
+  scale_colour_manual(values=c("#859a2f","#1a8de5"),name="Morphological type") +
+  scale_shape_manual(values=c(16,17),name="Morphological type") +
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 60, colour = "black"),
+        text=element_text(family="CMU Serif",size=60),
+        legend.position=c(0.2,0.8),legend.background=element_rect(fill=NA));
+ggsave("FoM_log_effects.png",width=10,height=7,FoM_log_plt,device="png");
+
+ef_lm_GD_log <- effect(c("morph_coded*trial_type_cod"),lm_GD_log);
+ef_lm_GD_log <- data.frame(ef_lm_GD_log);
+ef_lm_GD_log <- ef_lm_GD_log[ef_lm_GD_log$morph_coded==-0.5|ef_lm_GD_log$morph_coded==0.5,];
+ef_lm_GD_log$morph_type <- ef_lm_GD_log$morph_coded;
+ef_lm_GD_log$morph_type[ef_lm_GD_log$morph_type==-0.5] <- "simple";
+ef_lm_GD_log$morph_type[ef_lm_GD_log$morph_type==0.5] <- "complex";
+ef_lm_GD_log$morph_type <- factor(ef_lm_GD_log$morph_type, levels=c("simple","complex"));
+
+GD_log_plt <- ggplot(ef_lm_GD_log, aes(y=exp(fit), x=trial_type_cod, group=morph_type)) +
+  geom_line(aes(color=morph_type, linetype=morph_type), linewidth=1, position=position_dodge(width=0.2)) +
+  geom_point(aes(color=morph_type, shape=morph_type), size=3, position=position_dodge(width=0.2)) +
+  geom_errorbar(aes(ymin=exp(lower), ymax=exp(upper), color=morph_type), width=0.2, position=position_dodge(width=0.2)) +
+  
+  labs(x="Preview type",y="GD (ms)") +
+  scale_x_discrete(labels=c("Identical","Cognate","Legal nonword","Illegal nonword")) +
+  scale_linetype_manual(values=c("dashed", "solid"),name="Morphological type") +
+  scale_colour_manual(values=c("#859a2f","#1a8de5"),name="Morphological type") +
+  scale_shape_manual(values=c(16,17),name="Morphological type") +
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 60, colour = "black"),
+        text=element_text(family="CMU Serif",size=60),
+        legend.position=c(0.2,0.8),legend.background=element_rect(fill=NA));
+ggsave("GD_log_effects.png",width=10,height=7,GD_log_plt,device="png");
+
+ef_lm_GPD_log <- effect(c("morph_coded*trial_type_cod"),lm_GPD_log);
+ef_lm_GPD_log <- data.frame(ef_lm_GPD_log);
+ef_lm_GPD_log <- ef_lm_GPD_log[ef_lm_GPD_log$morph_coded==-0.5|ef_lm_GPD_log$morph_coded==0.5,];
+ef_lm_GPD_log$morph_type <- ef_lm_GPD_log$morph_coded;
+ef_lm_GPD_log$morph_type[ef_lm_GPD_log$morph_type==-0.5] <- "simple";
+ef_lm_GPD_log$morph_type[ef_lm_GPD_log$morph_type==0.5] <- "complex";
+ef_lm_GPD_log$morph_type <- factor(ef_lm_GPD_log$morph_type, levels=c("simple","complex"));
+
+GPD_log_plt <- ggplot(ef_lm_GPD_log, aes(y=exp(fit), x=trial_type_cod, group=morph_type)) +
+  geom_line(aes(color=morph_type, linetype=morph_type), linewidth=1, position=position_dodge(width=0.2)) +
+  geom_point(aes(color=morph_type, shape=morph_type), size=3, position=position_dodge(width=0.2)) +
+  geom_errorbar(aes(ymin=exp(lower), ymax=exp(upper), color=morph_type), width=0.2, position=position_dodge(width=0.2)) +
+  
+  labs(x="Preview type",y="GPD (ms)") +
+  scale_x_discrete(labels=c("Identical","Cognate","Legal nonword","Illegal nonword")) +
+  scale_linetype_manual(values=c("dashed", "solid"),name="Morphological type") +
+  scale_colour_manual(values=c("#859a2f","#1a8de5"),name="Morphological type") +
+  scale_shape_manual(values=c(16,17),name="Morphological type") +
+  
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"),
+        axis.text = element_text(family = "CMU Serif", size = 60, colour = "black"),
+        text=element_text(family="CMU Serif",size=60),
+        legend.position=c(0.2,0.8),legend.background=element_rect(fill=NA));
+ggsave("GPD_log_effects.png",width=10,height=7,GPD_log_plt,device="png");
+
+
+
+
